@@ -1,0 +1,19 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+backend/*.db
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Local tooling & OS
+.claude/
+.DS_Store
+*.log
+
+# Secrets
+.env
+.env.*

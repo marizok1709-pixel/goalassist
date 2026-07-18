@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  /* GoalAssist — light editorial theme. Warm paper, blue primary, dark ink.
+     Status colors ship with icon + label, never color alone. */
+  --color-page: #fafaf8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f3f3f0;
+  --color-ink: #191917;
+  --color-ink-2: #52514e;
+  --color-ink-muted: #8a887f;
+  --color-line: #e4e3dd;
+  --color-grid: #e9e8e2;
+  --color-baseline: #d6d5ce;
+  --color-accent: #2a78d6;
+  --color-accent-deep: #1c5cab;
+  --color-accent-wash: #eaf2fc;
+  --color-good: #0b8a0b;
+  --color-good-deep: #006300;
+  --color-warning: #a16207;
+  --color-warning-bright: #fab219;
+  --color-critical: #c93838;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html {
+  background: var(--color-page);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
