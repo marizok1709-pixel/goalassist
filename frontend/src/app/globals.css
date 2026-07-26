@@ -39,3 +39,98 @@ body {
 .tnum {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+   Onboarding — dark aurora + glassmorphism. Deliberately separate from the
+   light editorial app theme above; scoped to .ob-* classes so it never leaks
+   into the rest of the product. Applied as a fixed full-screen overlay.
+   --------------------------------------------------------------------------- */
+.ob-root {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  color: #fff;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(58% 48% at 21% 44%, rgba(41, 84, 214, 0.55), transparent 70%),
+    radial-gradient(54% 54% at 79% 42%, rgba(150, 52, 118, 0.5), transparent 72%),
+    radial-gradient(42% 42% at 50% 50%, rgba(224, 214, 208, 0.16), transparent 70%),
+    #050506;
+}
+
+.ob-glass {
+  background: rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.ob-glass::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+.ob-glass:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.ob-btn {
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  background: rgba(18, 18, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: background 0.15s ease;
+}
+.ob-btn:hover:not(:disabled) {
+  background: rgba(44, 44, 48, 0.7);
+}
+.ob-btn:disabled {
+  opacity: 0.45;
+}
+
+/* Native date picker: keep glass look, invert the calendar icon to white. */
+.ob-date::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+/* Gentle fade+rise as each conversational step mounts. */
+.ob-fade {
+  animation: ob-fade-in 0.45s ease both;
+}
+@keyframes ob-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* "Building your plan" progress fill — sweeps to ~92% while the API works. */
+.ob-building-fill {
+  width: 10%;
+  background: linear-gradient(90deg, rgba(120, 150, 210, 0.7), rgba(170, 120, 160, 0.7));
+  animation: ob-load 2.4s ease-out forwards;
+}
+@keyframes ob-load {
+  from {
+    width: 8%;
+  }
+  to {
+    width: 92%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-fade,
+  .ob-building-fill {
+    animation: none;
+  }
+  .ob-building-fill {
+    width: 60%;
+  }
+}

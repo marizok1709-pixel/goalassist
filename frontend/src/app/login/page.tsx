@@ -56,7 +56,7 @@ export default function LoginPage() {
       </form>
       <p className="mt-4 text-sm text-ink-muted">
         No account?{" "}
-        <Link href="/register" className="text-accent hover:underline">
+        <Link href="/onboarding" className="text-accent hover:underline">
           Register
         </Link>
       </p>
