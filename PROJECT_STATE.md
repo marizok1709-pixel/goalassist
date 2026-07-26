@@ -1,6 +1,19 @@
 # GoalAssist — Project State (handoff)
 
-_Last updated: 2026-07-19. Read this first when resuming work._
+_Last updated: 2026-07-27. Read this first when resuming work._
+
+## ⏭️ Next session (resume here)
+
+**Redesign the dashboard (`/`) and daily page (`/today`) to match the new dark
+onboarding look**, so the whole app is visually consistent. As of 2026-07-27
+onboarding is dark/aurora/glassmorphism (see `/onboarding` + `designs/`) but the
+rest of the app is still the light/serif editorial theme — a jarring jump after
+"Start today →". Owner (Mark) decided to re-skin the core loop to the dark
+system. The reusable dark/glass tokens live under `.ob-*` in `globals.css` and
+the `motion/react` transition patterns are in `frontend/src/app/onboarding/page.tsx`.
+
+Onboarding flow itself is **built, verified, pushed** on branch `onboarding-flow`
+→ **PR #1** (not yet merged to main).
 
 ## One-liner
 
@@ -71,6 +84,13 @@ absolute progress ("I'm on page 120"). `/goals/{id}/plan` (pace + reality),
 
 ## Frontend pages (all client components, JWT in localStorage)
 
+- `/onboarding` — **conversational first-run flow** (dark aurora + glassmorphism,
+  `motion/react` transitions). welcome → register → goal → deadline → materials →
+  how-far → availability → building → launch → `/today`. The only account path
+  that also sets weekly availability. Entry points funnel here: logged-out `/`
+  redirects here; old `/register` redirects here. Built to `designs/*.png`.
+  (Design language deliberately differs from the light pages below — the core
+  loop is slated to be re-skinned to match; see "Next session" up top.)
 - `/` Command Center — one dominant trajectory %, status badge, message,
   bar with expected-tick, TODAY'S MOVE + START; other missions as small cards.
 - `/today` — execution only: tasks w/ checkbox, **Why?** toggle, "did more/less"
@@ -106,16 +126,29 @@ numerals. Status is never color-alone (icon + label always).
 
 ## Known gaps / next steps (agreed roadmap)
 
-1. **Conversational onboarding** — 5-screen flow (goal? → when? → materials? →
-   how far already? → when can you study?) replacing the single-form wizard.
-2. `git init` + first commit (repo is STILL not under version control!).
-3. Empty/loading/error states, mobile responsiveness pass (students live on
-   phones; current UI is desktop-first).
-4. Landing page with the one-liner.
-5. Milestone 2 "Trusted": explain schedule *changes*, not just today's tasks.
-6. Deploy for 10 users: env secrets (`ACADASSIST_SECRET`), SQLite→Postgres,
+- [x] **Conversational onboarding** — DONE (branch `onboarding-flow`, PR #1).
+  Dark/glass, `motion/react` transitions. Also serves as the landing page
+  (welcome screen). Availability now collected in-flow.
+- [x] `git init` + version control — DONE (commit `8c3d490`); GitHub remote
+  `marizok1709-pixel/goalassist`.
+1. **Re-skin dashboard (`/`) + daily (`/today`) to the dark onboarding look**
+   ← NEXT SESSION. Then extend to `/calendar` and mission detail.
+2. Empty/loading/error states, mobile responsiveness pass (students live on
+   phones; current UI is desktop-first). Fold into the re-skin.
+3. Milestone 2 "Trusted": explain schedule *changes*, not just today's tasks.
+4. Deploy for 10 users: env secrets (`ACADASSIST_SECRET`), SQLite→Postgres,
    HTTPS, error logging, backups; per-user timezone handling.
-7. Watch 10 users create a mission; every >5s hesitation is a UX bug.
+5. Watch 10 users create a mission; every >5s hesitation is a UX bug.
+
+## Design direction (as of 2026-07-27)
+
+Two visual systems currently coexist: the original **light editorial** theme
+(warm paper, serif, blue `#2a78d6`) on `/`, `/today`, `/calendar`, mission
+detail + settings; and the new **dark/aurora/glassmorphism** system on
+`/onboarding` (bold sans, glass fields, `motion/react` transitions, tokens
+under `.ob-*` in `globals.css`, Figma exports in `designs/`). The owner has
+decided the dark system wins — the core loop is being migrated to it, starting
+with the dashboard and daily page. New deps: `motion`.
 
 ## Verification habits
 
