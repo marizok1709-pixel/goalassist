@@ -95,20 +95,7 @@ body {
   cursor: pointer;
 }
 
-/* Gentle fade+rise as each conversational step mounts. */
-.ob-fade {
-  animation: ob-fade-in 0.45s ease both;
-}
-@keyframes ob-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* Step-to-step transitions are handled by motion/react (see onboarding page). */
 
 /* "Building your plan" progress fill — sweeps to ~92% while the API works. */
 .ob-building-fill {
@@ -126,11 +113,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ob-fade,
   .ob-building-fill {
     animation: none;
-  }
-  .ob-building-fill {
     width: 60%;
   }
 }
