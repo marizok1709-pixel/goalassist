@@ -5,21 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { api, ApiError, setToken } from "@/lib/api";
-
-// Weekly availability keys the backend expects (hours per weekday, 0 = rest).
-const DAYS: { key: string; label: string }[] = [
-  { key: "mon", label: "Monday" },
-  { key: "tue", label: "Tuesday" },
-  { key: "wed", label: "Wednesday" },
-  { key: "thu", label: "Thursday" },
-  { key: "fri", label: "Friday" },
-  { key: "sat", label: "Saturday" },
-  { key: "sun", label: "Sunday" },
-];
+import { DarkNav } from "@/components/darkchrome";
 
 // The conversational step machine. Register creates the account (token) up
 // front; every later answer is held in local state until "building", which
-// fires createGoal → addMaterial(s) → updateMe(availability) in one shot.
+// fires createGoal → addMaterial(s). Weekly availability is NOT collected here
+// — students meet the dashboard/daily loop first, then set timing via the
+// "connect your calendar" nudge (/timing). Until then the schedule spreads
+// work evenly (the engine defaults to even weighting when availability is null).
 type Step =
   | "welcome"
   | "register"
@@ -27,7 +20,6 @@ type Step =
   | "deadline"
   | "materials"
   | "howfar"
-  | "availability"
   | "building"
   | "launch";
 
@@ -38,14 +30,13 @@ const STEP_ORDER: Step[] = [
   "deadline",
   "materials",
   "howfar",
-  "availability",
   "building",
   "launch",
 ];
 
-// Progress-dot order (approved: dots span the five content questions only;
-// welcome / register / building / launch sit outside the counter).
-const COUNTED: Step[] = ["goal", "deadline", "materials", "howfar", "availability"];
+// Progress-dot order: dots span the four content questions only;
+// welcome / register / building / launch sit outside the counter.
+const COUNTED: Step[] = ["goal", "deadline", "materials", "howfar"];
 
 // Directional page transition: content lifts + de-blurs into place over a
 // persistent background, previous content lifts + blurs away first. Easing is
@@ -98,9 +89,6 @@ export default function OnboardingPage() {
   const [title, setTitle] = useState("");
   const [deadline, setDeadline] = useState("");
   const [materials, setMaterials] = useState<MaterialDraft[]>([{ ...emptyMaterial }]);
-  const [avail, setAvail] = useState<Record<string, number>>(() =>
-    Object.fromEntries(DAYS.map((d) => [d.key, 0]))
-  );
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -162,7 +150,6 @@ export default function OnboardingPage() {
           });
           remaining.push({ name: m.name.trim(), amount: Math.max(total - done, 0), unit: m.unit.trim() || "units" });
         }
-        await api.updateMe({ availability: avail });
         if (cancelled) return;
         // Let the loading bar breathe before the reveal.
         await new Promise((r) => setTimeout(r, 900));
@@ -172,7 +159,7 @@ export default function OnboardingPage() {
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof ApiError ? err.message : "Cannot reach the server");
-        navigate("availability");
+        navigate("howfar");
       }
     })();
     return () => {
@@ -182,12 +169,11 @@ export default function OnboardingPage() {
   }, [step]);
 
   const dLeft = daysFromToday(deadline);
-  const totalHours = DAYS.reduce((s, d) => s + (avail[d.key] || 0), 0);
 
   return (
     <MotionConfig reducedMotion="user">
       <div className="ob-root">
-        <TopBar />
+        <DarkNav />
 
         <AnimatePresence>
           {step !== "welcome" && step !== "launch" && step !== "building" && (
@@ -408,41 +394,8 @@ export default function OnboardingPage() {
                 );
               })}
             </div>
-            <StepButtons onBack={() => navigate("materials")} onNext={() => navigate("availability")} />
-          </>
-        );
-
-      case "availability":
-        return (
-          <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">Let&apos;s talk about timing</h1>
-            <p className="mt-3 text-lg text-white/60">Study hours per day. 0 means a rest day — no tasks land there.</p>
-            <div className="mt-10 grid w-full grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-              {DAYS.map((d) => (
-                <DayColumn
-                  key={d.key}
-                  label={d.label}
-                  hours={avail[d.key]}
-                  onStep={(delta) =>
-                    setAvail((prev) => ({
-                      ...prev,
-                      [d.key]: Math.min(Math.max((prev[d.key] || 0) + delta, 0), 16),
-                    }))
-                  }
-                />
-              ))}
-            </div>
-            <p className="mt-5 text-base text-white/60 tnum">{totalHours} h / week</p>
             {error && <ErrorLine msg={error} />}
-            <StepButtons
-              onBack={() => navigate("howfar")}
-              onNext={() => totalHours > 0 && navigate("building")}
-              disabled={totalHours === 0}
-              label="Build my plan →"
-            />
-            {totalHours === 0 && (
-              <p className="mt-2 text-sm text-white/50">Give at least one day some hours — the work has to land somewhere.</p>
-            )}
+            <StepButtons onBack={() => navigate("materials")} onNext={() => navigate("building")} label="Build my plan →" />
           </>
         );
 
@@ -502,22 +455,6 @@ export default function OnboardingPage() {
 
 // ---------- small presentational pieces ----------
 
-function TopBar() {
-  // Marketing nav from the design; routes don't exist yet, so these are inert
-  // placeholders (plus a light-mode toggle placeholder) — flagged for later.
-  const items = ["policies and data", "settings", "social media", "support", "about us"];
-  return (
-    <div className="flex items-center justify-between px-8 py-6 text-sm font-medium text-white/85">
-      <div className="flex flex-wrap gap-6">
-        {items.map((i) => (
-          <span key={i} className="cursor-default">{i}</span>
-        ))}
-      </div>
-      <span className="cursor-default">light mode</span>
-    </div>
-  );
-}
-
 function ProgressDots({ step }: { step: Step }) {
   const idx = COUNTED.indexOf(step);
   return (
@@ -564,47 +501,5 @@ function StepButtons({
         {label}
       </button>
     </div>
-  );
-}
-
-function DayColumn({
-  label,
-  hours,
-  onStep,
-}: {
-  label: string;
-  hours: number;
-  onStep: (delta: number) => void;
-}) {
-  const active = hours > 0;
-  return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      transition={{ type: "spring", stiffness: 320, damping: 24 }}
-      className={`ob-glass flex h-52 flex-col items-center rounded-3xl px-2 py-4 ${active ? "" : "opacity-60"}`}
-    >
-      <span className="text-sm font-semibold text-white">{label}</span>
-      <div className="mt-auto flex flex-col items-center gap-2">
-        <button
-          className="ob-btn h-8 w-8 rounded-full text-lg leading-none"
-          onClick={() => onStep(0.5)}
-          aria-label={`Add time on ${label}`}
-        >
-          +
-        </button>
-        <motion.span key={hours} initial={{ scale: 1.25 }} animate={{ scale: 1 }} className="text-2xl font-bold tnum">
-          {active ? hours : "—"}
-        </motion.span>
-        <span className="text-[11px] uppercase tracking-wide text-white/50">{active ? "hours" : "rest"}</span>
-        <button
-          className="ob-btn h-8 w-8 rounded-full text-lg leading-none disabled:opacity-30"
-          onClick={() => onStep(-0.5)}
-          disabled={!active}
-          aria-label={`Remove time on ${label}`}
-        >
-          −
-        </button>
-      </div>
-    </motion.div>
   );
 }

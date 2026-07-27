@@ -167,8 +167,15 @@ def build_reality_report(goal: Goal, today: date) -> RealityReport:
             "At current speed you WILL miss your deadline."
         ),
     }
-    if status == "ON_TRACK" and elapsed == 0:
-        messages["ON_TRACK"] = "Mission launched. Complete today's tasks to bend the curve."
+    if elapsed == 0:
+        # Day zero: "0% expected" is technically true but reads as broken. Speak
+        # to the fresh start instead of the linear baseline.
+        if status == "ON_TRACK":
+            messages["ON_TRACK"] = "Mission launched. Complete today's tasks to bend the curve."
+        elif status == "AHEAD":
+            messages["AHEAD"] = (
+                f"Strong start — {actual_pct:.0f}% already done on day one. Hold this pace."
+            )
     message = messages[status]
 
     return RealityReport(

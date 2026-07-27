@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, getToken, ScheduledTask, Today } from "@/lib/api";
-import { Spinner } from "@/components/ui";
+import { DarkShell } from "@/components/darkchrome";
 
 // Praise shows the reward, not the cheer. Higher tiers earn the big lines.
 const PRAISE: string[][] = [
@@ -49,13 +49,19 @@ export default function TodayPage() {
 
   useEffect(() => {
     if (!getToken()) {
-      router.push("/login");
+      router.push("/onboarding");
       return;
     }
     load();
   }, [router, load]);
 
-  if (!data) return <Spinner />;
+  if (!data) {
+    return (
+      <DarkShell>
+        <p className="py-24 text-center text-white/50">loading…</p>
+      </DarkShell>
+    );
+  }
 
   const allTasks = data.missions.flatMap((m) => m.tasks);
   const openTasks = allTasks.filter((t) => !t.completed);
@@ -101,154 +107,142 @@ export default function TodayPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-ink-muted">
-        Today ·{" "}
-        {new Date(`${data.date}T00:00:00`).toLocaleDateString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-        })}
-      </p>
+    <DarkShell>
+      <div className="pt-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+          Today ·{" "}
+          {new Date(`${data.date}T00:00:00`).toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          })}
+        </p>
 
-      {flash && (
-        <div className="mt-4 rounded-lg border border-accent/40 bg-accent-wash px-4 py-3 text-sm text-ink">
-          {flash}
+        {flash && (
+          <div className="ob-glass mt-4 rounded-2xl px-4 py-3 text-sm text-white/90">{flash}</div>
+        )}
+
+        {allTasks.length === 0 && (
+          <div className="mt-16 text-center">
+            <p className="text-2xl font-bold text-white">Nothing scheduled today.</p>
+            <p className="mt-2 text-sm text-white/55">
+              Rest day, or no missions yet. Staying ahead is always allowed.
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <button
+                onClick={borrowTomorrow}
+                disabled={pullingMore}
+                className="ob-btn rounded-2xl px-6 py-3 text-sm font-semibold disabled:opacity-50"
+              >
+                {pullingMore ? "…" : "Borrow tomorrow's work"}
+              </button>
+              <Link href="/missions/new" className="text-sm text-white/60 hover:text-white">
+                + New mission
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {dayComplete && (
+          <div className="ob-glass mt-10 rounded-3xl p-7 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">✓ Day complete</p>
+            <p className="mx-auto mt-3 max-w-md text-2xl font-semibold text-white">
+              {praise ?? praiseFor(doneCount)}
+            </p>
+            <p className="mt-3 text-xs text-white/50 tnum">
+              {doneCount} {doneCount === 1 ? "task" : "tasks"} completed
+            </p>
+            <div className="mt-5">
+              <p className="text-sm text-white/70">Feeling good?</p>
+              <button
+                onClick={borrowTomorrow}
+                disabled={pullingMore}
+                className="ob-btn mt-2 rounded-2xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
+              >
+                {pullingMore ? "…" : "Borrow tomorrow's work"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 space-y-8">
+          {data.missions
+            .filter((m) => m.tasks.length > 0)
+            .map((m) => (
+              <section key={m.goal_id}>
+                <div className="flex items-baseline justify-between">
+                  <Link
+                    href={`/missions/${m.goal_id}`}
+                    className="text-xs font-semibold uppercase tracking-[0.15em] text-white/55 hover:text-white/80"
+                  >
+                    {m.title}
+                  </Link>
+                  {m.days_behind > 0 && (
+                    <span className="text-xs font-semibold text-amber-300">◆ {m.days_behind} days behind</span>
+                  )}
+                </div>
+                <ul className="mt-2 space-y-2">
+                  {m.tasks.map((t) => (
+                    <li
+                      key={t.id}
+                      className={`ob-glass overflow-hidden rounded-2xl transition-colors ${
+                        t.completed ? "opacity-60" : "hover:bg-white/[0.12]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 px-4 py-3.5">
+                        <input
+                          type="checkbox"
+                          checked={t.completed}
+                          disabled={busy === t.id}
+                          onChange={(e) => finishTask(t, e.target.checked)}
+                          className="h-5 w-5 shrink-0 accent-white"
+                        />
+                        <span className={`flex-1 text-[15px] ${t.completed ? "text-white/45 line-through" : "text-white"}`}>
+                          {t.description}
+                        </span>
+                        {!t.completed && (
+                          <>
+                            {t.why && (
+                              <button
+                                onClick={() => setWhyOpen(whyOpen === t.id ? null : t.id)}
+                                className={`shrink-0 text-xs ${whyOpen === t.id ? "text-white" : "text-white/50 hover:text-white"}`}
+                              >
+                                Why?
+                              </button>
+                            )}
+                            <button
+                              onClick={() => logActual(t)}
+                              title="Did more or less than planned? Log the real amount"
+                              className="shrink-0 text-xs text-white/50 hover:text-white"
+                            >
+                              did more/less
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {whyOpen === t.id && t.why && (
+                        <p className="border-t border-white/10 bg-white/[0.04] px-4 py-2.5 text-[13px] leading-relaxed text-white/70">
+                          {t.why}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
         </div>
-      )}
 
-      {allTasks.length === 0 && (
-        <div className="mt-16 text-center">
-          <p className="font-serif text-2xl font-semibold text-ink">Nothing scheduled today.</p>
-          <p className="mt-2 text-sm text-ink-muted">
-            Rest day, or no missions yet. Staying ahead is always allowed.
-          </p>
-          <div className="mt-5 flex items-center justify-center gap-4">
-            <button
-              onClick={borrowTomorrow}
-              disabled={pullingMore}
-              className="rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white hover:bg-accent-deep disabled:opacity-50"
-            >
-              {pullingMore ? "…" : "Borrow tomorrow's work"}
-            </button>
-            <Link href="/missions/new" className="text-sm text-accent hover:underline">
-              + New mission
+        {allTasks.length > 0 && (
+          <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-4">
+            <span className="text-xs text-white/45 tnum">
+              {doneCount}/{allTasks.length} done
+            </span>
+            <Link href="/calendar" className="text-xs text-white/50 hover:text-white">
+              View full calendar →
             </Link>
           </div>
-        </div>
-      )}
-
-      {dayComplete && (
-        <div className="mt-10 rounded-xl border border-good/40 bg-surface p-7 text-center shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-good">
-            ✓ Day complete
-          </p>
-          <p className="mx-auto mt-3 max-w-md font-serif text-2xl text-ink">
-            {praise ?? praiseFor(doneCount)}
-          </p>
-          <p className="mt-3 text-xs text-ink-muted tnum">
-            {doneCount} {doneCount === 1 ? "task" : "tasks"} completed
-          </p>
-          <div className="mt-5">
-            <p className="text-sm text-ink-2">Feeling good?</p>
-            <button
-              onClick={borrowTomorrow}
-              disabled={pullingMore}
-              className="mt-2 rounded-lg border border-accent px-6 py-2.5 text-sm font-medium text-accent hover:bg-accent hover:text-white disabled:opacity-50 transition-colors"
-            >
-              {pullingMore ? "…" : "Borrow tomorrow's work"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 space-y-8">
-        {data.missions
-          .filter((m) => m.tasks.length > 0)
-          .map((m) => (
-            <section key={m.goal_id}>
-              <div className="flex items-baseline justify-between">
-                <Link
-                  href={`/missions/${m.goal_id}`}
-                  className="text-xs font-medium uppercase tracking-[0.15em] text-ink-muted hover:text-ink-2"
-                >
-                  {m.title}
-                </Link>
-                {m.days_behind > 0 && (
-                  <span className="text-xs font-medium text-warning">
-                    ◆ {m.days_behind} days behind
-                  </span>
-                )}
-              </div>
-              <ul className="mt-2 space-y-2">
-                {m.tasks.map((t) => (
-                  <li
-                    key={t.id}
-                    className={`rounded-xl border transition-colors ${
-                      t.completed
-                        ? "border-line bg-surface-2 opacity-70"
-                        : "border-line bg-surface shadow-sm hover:border-accent/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 px-4 py-3.5">
-                      <input
-                        type="checkbox"
-                        checked={t.completed}
-                        disabled={busy === t.id}
-                        onChange={(e) => finishTask(t, e.target.checked)}
-                        className="h-5 w-5 shrink-0 accent-[#2a78d6]"
-                      />
-                      <span
-                        className={`flex-1 text-[15px] ${
-                          t.completed ? "text-ink-muted line-through" : "text-ink"
-                        }`}
-                      >
-                        {t.description}
-                      </span>
-                      {!t.completed && (
-                        <>
-                          {t.why && (
-                            <button
-                              onClick={() => setWhyOpen(whyOpen === t.id ? null : t.id)}
-                              className={`shrink-0 text-xs ${
-                                whyOpen === t.id ? "text-accent" : "text-ink-muted hover:text-accent"
-                              }`}
-                            >
-                              Why?
-                            </button>
-                          )}
-                          <button
-                            onClick={() => logActual(t)}
-                            title="Did more or less than planned? Log the real amount"
-                            className="shrink-0 text-xs text-ink-muted hover:text-accent"
-                          >
-                            did more/less
-                          </button>
-                        </>
-                      )}
-                    </div>
-                    {whyOpen === t.id && t.why && (
-                      <p className="border-t border-line bg-accent-wash px-4 py-2.5 text-[13px] leading-relaxed text-ink-2 rounded-b-xl">
-                        {t.why}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+        )}
       </div>
-
-      {allTasks.length > 0 && (
-        <div className="mt-8 flex items-center justify-between border-t border-line pt-4">
-          <span className="text-xs text-ink-muted tnum">
-            {doneCount}/{allTasks.length} done
-          </span>
-          <Link href="/calendar" className="text-xs text-ink-muted hover:text-accent">
-            View full calendar →
-          </Link>
-        </div>
-      )}
-    </div>
+    </DarkShell>
   );
 }
