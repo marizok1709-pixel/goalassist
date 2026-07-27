@@ -4,16 +4,24 @@ _Last updated: 2026-07-27. Read this first when resuming work._
 
 ## ⏭️ Next session (resume here)
 
-**Redesign the dashboard (`/`) and daily page (`/today`) to match the new dark
-onboarding look**, so the whole app is visually consistent. As of 2026-07-27
-onboarding is dark/aurora/glassmorphism (see `/onboarding` + `designs/`) but the
-rest of the app is still the light/serif editorial theme — a jarring jump after
-"Start today →". Owner (Mark) decided to re-skin the core loop to the dark
-system. The reusable dark/glass tokens live under `.ob-*` in `globals.css` and
-the `motion/react` transition patterns are in `frontend/src/app/onboarding/page.tsx`.
+Dark re-skin now covers **onboarding, dashboard (`/`), daily (`/today`), `/timing`,
+and the nav pages** (policies/support/about/social). Shared chrome lives in
+`frontend/src/components/darkchrome.tsx` (`DarkShell`, `DarkNav`, `DayColumn`);
+dark tokens under `.ob-*` in `globals.css`. All on branch `onboarding-flow` → **PR #1**
+(not merged to main).
 
-Onboarding flow itself is **built, verified, pushed** on branch `onboarding-flow`
-→ **PR #1** (not yet merged to main).
+**Still light (re-skin next):** `/calendar`, `/missions/[id]` (mission detail),
+`/missions/new`, `/settings`, `/login`. Also:
+- **Empty day-one daily.** A fresh mission with sparse cadence (e.g. 32 units /
+  91 days) schedules the first task a few days out via cumulative rounding, so a
+  brand-new user can land on "Nothing scheduled today" right after onboarding —
+  undercuts the "heart of the product" moment. Decide: front-load day 1 / ensure
+  ≥1 task on creation vs. leave the honest spacing.
+- **New-mission reuse.** `/missions/new` is still the old light wizard; the
+  onboarding flow only handles first-run (it registers). Build a dark
+  "new mission" path for authed users (skip register).
+- **"light mode" toggle** in `DarkNav` is still an inert placeholder (owner will
+  do later).
 
 ## One-liner
 
@@ -142,13 +150,12 @@ numerals. Status is never color-alone (icon + label always).
 
 ## Design direction (as of 2026-07-27)
 
-Two visual systems currently coexist: the original **light editorial** theme
-(warm paper, serif, blue `#2a78d6`) on `/`, `/today`, `/calendar`, mission
-detail + settings; and the new **dark/aurora/glassmorphism** system on
-`/onboarding` (bold sans, glass fields, `motion/react` transitions, tokens
-under `.ob-*` in `globals.css`, Figma exports in `designs/`). The owner has
-decided the dark system wins — the core loop is being migrated to it, starting
-with the dashboard and daily page. New deps: `motion`.
+The **dark/aurora/glassmorphism** system (bold sans, glass fields, `motion/react`
+transitions, tokens under `.ob-*` in `globals.css`, shared chrome in
+`components/darkchrome.tsx`, Figma exports in `designs/`) now covers onboarding,
+dashboard, daily, `/timing`, and the nav pages. The original **light editorial**
+theme still remains on `/calendar`, `/missions/[id]`, `/missions/new`,
+`/settings`, `/login` — to be migrated next. New deps: `motion`.
 
 ## Verification habits
 
