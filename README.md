@@ -1,4 +1,4 @@
-# AcadAssist (Life.exe) — MVP v0.1
+# AcadAssist — MVP v0.1
 
 Deadline-driven academic execution system. A student creates a **Mission** with a
 hard deadline, enters real **Materials** (book pages, mock exams, vocab sets),
