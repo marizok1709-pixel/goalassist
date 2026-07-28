@@ -7,6 +7,21 @@ engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 ## 2026-07-28
 
 ### Added
+- **Calendar week view (new default).** `/calendar` opens on the current week:
+  seven full-height day columns showing *every* task (done struck, missed red),
+  a per-day done counter, week ← → navigation, and the same day-detail panel.
+  A toggle switches to the classic month grid and back; the selected day
+  carries over between views.
+- **Light mode.** The nav "light mode" toggle now works: white background,
+  black text (implemented as a faithful inversion of the dark system so every
+  page flips at once). Persisted in `localStorage`, applied on every page,
+  label flips to "dark mode".
+
+### Changed
+- **"Connect your calendar" → "Design your schedule."** The dashboard nudge and
+  `/timing` never connected any external calendar — the copy now says what the
+  feature does.
+- **All test accounts wiped** from the dev database (fresh start before beta).
 - **Dark re-skin complete.** The last light pages — mission detail
   (`/missions/[id]`), `/missions/new`, `/calendar`, `/settings`, `/login` — now
   use the dark aurora + glassmorphism system. The whole product is one design

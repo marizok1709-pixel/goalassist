@@ -7,7 +7,6 @@ import { motion } from "motion/react";
 import { clearToken, getToken, TrajectoryStatus } from "@/lib/api";
 
 // Marketing nav from the Figma — now functional (each links to a real page).
-// "light mode" stays an inert placeholder for now (theme toggle comes later).
 const MARKETING: { href: string; label: string }[] = [
   { href: "/policies", label: "policies and data" },
   { href: "/settings", label: "settings" },
@@ -20,6 +19,7 @@ export function DarkNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [authed, setAuthed] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
     // Token lives in localStorage (client-only), so it can only be read after
@@ -27,6 +27,22 @@ export function DarkNav() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAuthed(getToken() !== null);
   }, [pathname]);
+
+  useEffect(() => {
+    // Theme is also client-only state; re-applying on mount keeps every page
+    // consistent after a hard navigation.
+    const saved = localStorage.getItem("goalassist_theme") === "light" ? "light" : "dark";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTheme(saved);
+    document.documentElement.dataset.theme = saved;
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    localStorage.setItem("goalassist_theme", next);
+    document.documentElement.dataset.theme = next;
+  }
 
   function logout() {
     clearToken();
@@ -59,7 +75,9 @@ export function DarkNav() {
             </button>
           </nav>
         )}
-        <span className="cursor-default text-white/80">light mode</span>
+        <button onClick={toggleTheme} className="text-white/80 transition-colors hover:text-white">
+          {theme === "dark" ? "light mode" : "dark mode"}
+        </button>
       </div>
     </div>
   );

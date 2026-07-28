@@ -51,7 +51,7 @@ export default function TimingPage() {
   return (
     <DarkShell width="max-w-4xl">
       <div className="flex flex-col items-center pt-10 text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/60">Connect your calendar</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-white/60">Design your schedule</p>
         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">When can you actually study?</h1>
         <p className="mt-3 max-w-xl text-lg text-white/60">
           Set your hours per day and every mission reshuffles around them — heavier days carry more

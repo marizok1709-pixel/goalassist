@@ -71,7 +71,7 @@ export default function DashboardPage() {
               className="ob-glass mt-5 flex items-center justify-between gap-4 rounded-2xl px-5 py-4 transition-colors hover:bg-white/[0.12]"
             >
               <div>
-                <p className="text-sm font-semibold text-white">Connect your calendar</p>
+                <p className="text-sm font-semibold text-white">Design your schedule</p>
                 <p className="mt-0.5 text-sm text-white/60">
                   Right now work spreads evenly. Tell us when you actually study to sharpen the plan.
                 </p>

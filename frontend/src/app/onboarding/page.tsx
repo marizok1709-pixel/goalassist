@@ -11,7 +11,7 @@ import { DarkNav } from "@/components/darkchrome";
 // front; every later answer is held in local state until "building", which
 // fires createGoal → addMaterial(s). Weekly availability is NOT collected here
 // — students meet the dashboard/daily loop first, then set timing via the
-// "connect your calendar" nudge (/timing). Until then the schedule spreads
+// "design your schedule" nudge (/timing). Until then the schedule spreads
 // work evenly (the engine defaults to even weighting when availability is null).
 type Step =
   | "welcome"

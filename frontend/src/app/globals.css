@@ -97,6 +97,19 @@ body {
   cursor: pointer;
 }
 
+/* ---------------------------------------------------------------------------
+   Light mode — toggled from DarkNav ("light mode"), persisted in localStorage
+   as goalassist_theme, applied as data-theme on <html>. Implemented as a
+   faithful inversion of the whole dark system: near-black becomes white, white
+   text becomes black; hue-rotate keeps the status colors in their families.
+   --------------------------------------------------------------------------- */
+html[data-theme="light"] {
+  background: #fafaf9;
+}
+html[data-theme="light"] .ob-root {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* Step-to-step transitions are handled by motion/react (see onboarding page). */
 
 /* "Building your plan" progress fill — sweeps to ~92% while the API works. */

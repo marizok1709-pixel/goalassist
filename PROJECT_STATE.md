@@ -16,16 +16,21 @@ tokens under `.ob-*` in `globals.css`. No native browser dialogs remain —
 button was removed by owner request. All on branch `onboarding-flow` → **PR #1**
 (not merged to main).
 
+Since then (2026-07-28, second pass): `/calendar` defaults to a **week view**
+(7 full day columns, all tasks visible, week nav) with a month-view toggle;
+**light mode is live** (DarkNav toggle, `goalassist_theme` in localStorage,
+`html[data-theme="light"]` + an invert/hue-rotate rule in `globals.css`);
+"Connect your calendar" copy is now **"Design your schedule"** (nothing ever
+connected a calendar); **all dev accounts were wiped** from `acadassist.db`.
+
 Open items:
 - **Empty day-one daily.** A fresh mission with sparse cadence (e.g. 32 units /
   91 days) schedules the first task a few days out via cumulative rounding, so a
   brand-new user can land on "Nothing scheduled today" right after onboarding —
   undercuts the "heart of the product" moment. Decide: front-load day 1 / ensure
   ≥1 task on creation vs. leave the honest spacing.
-- **"light mode" toggle** in `DarkNav` is still an inert placeholder (owner will
-  do later; light tokens kept in `globals.css` for it).
 - **Mobile responsiveness pass** — students live on phones; the glass pages are
-  desktop-first (calendar grid + materials rows are the tight spots).
+  desktop-first (calendar grids + materials rows are the tight spots).
 
 ## One-liner
 
@@ -108,8 +113,10 @@ All pages share the dark aurora + glassmorphism design language.
   logging (inline glass panel, not a browser prompt), overshoot flash banner,
   Day Complete card with consequence-based praise ladder (4 tiers by tasks
   done) + "Borrow tomorrow's work".
-- `/calendar` — in-app month grid (Google Calendar was explicitly rejected):
-  today circled, chips per day, missed = red, done = struck, day-detail panel.
+- `/calendar` — in-app calendar (Google Calendar was explicitly rejected).
+  Defaults to a **week view** (7 day columns, every task visible, done counter)
+  for planning the week you're in; toggle to the month grid. Today circled,
+  missed = red, done = struck, day-detail panel under both views.
 - `/missions/new` — single-page wizard (title/category/started/deadline +
   materials with "Done" starting point) → **Mission Launch** moment (serif
   title, big day-count, "you'll need", Start today →).
@@ -123,8 +130,11 @@ All pages share the dark aurora + glassmorphism design language.
 glass fields (`.ob-glass`), glass buttons (`.ob-btn`), bold sans type, white
 text at opacity steps (white → /85 → /70 → /50 → /45), status colors
 emerald-300 / amber-300 / red-300, `tnum` class for aligned numerals. Status is
-never color-alone (icon + label always). The old light-editorial tokens remain
-in `globals.css` `@theme` only for the future "light mode" toggle.
+never color-alone (icon + label always). **Light mode** = whole-app inversion
+(`html[data-theme="light"] .ob-root { filter: invert(1) hue-rotate(180deg) }`),
+toggled from DarkNav, stored as `goalassist_theme`. The old light-editorial
+`@theme` tokens in `globals.css` are unused legacy kept for a possible real
+light redesign.
 
 ## Product rules (owner decisions — do not regress)
 
