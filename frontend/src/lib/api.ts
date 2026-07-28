@@ -176,7 +176,14 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      if (typeof body.detail === "string") {
+        detail = body.detail;
+      } else if (Array.isArray(body.detail)) {
+        // FastAPI/pydantic 422: array of {msg, loc}. Show readable messages.
+        detail = body.detail.map((e: { msg?: string }) => e?.msg ?? String(e)).join("; ");
+      } else if (body.detail) {
+        detail = JSON.stringify(body.detail);
+      }
     } catch {
       /* keep statusText */
     }

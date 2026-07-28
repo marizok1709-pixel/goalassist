@@ -130,6 +130,39 @@ export default function OnboardingPage() {
     }
   }
 
+  // Dev-only: seed a fresh account with a dense mission (tasks land today) and a
+  // weekly rhythm, then drop straight into the daily page. One click to a fully
+  // populated app for testing — skips the whole flow.
+  async function loadDemo() {
+    setBusy(true);
+    setError("");
+    try {
+      const email = `demo_${Date.now()}@goalassist.app`;
+      const reg = await api.register({ name: "Demo Student", email, password: "demodemo12" });
+      setToken(reg.access_token);
+      const deadline = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+      const goal = await api.createGoal({ title: "Physics Final", deadline });
+      await api.addMaterial(goal.id, {
+        name: "Halliday & Resnick",
+        total_quantity: 300,
+        unit: "pages",
+        already_completed: 60,
+      });
+      await api.addMaterial(goal.id, {
+        name: "Past exam papers",
+        total_quantity: 8,
+        unit: "exams",
+        already_completed: 1,
+      });
+      // Hours every day so the demo always has tasks today, whatever weekday it is.
+      await api.updateMe({ availability: { mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 } });
+      router.push("/today");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Cannot reach the server");
+      setBusy(false);
+    }
+  }
+
   // ----- build everything once all answers are collected -----
   useEffect(() => {
     if (step !== "building") return;
@@ -158,8 +191,9 @@ export default function OnboardingPage() {
         navigate("launch");
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : "Cannot reach the server");
+        // navigate() clears error, so set it *after* returning to the step.
         navigate("howfar");
+        setError(err instanceof ApiError ? err.message : "Cannot reach the server");
       }
     })();
     return () => {
@@ -230,6 +264,16 @@ export default function OnboardingPage() {
                 Sign in
               </Link>
             </p>
+            {process.env.NODE_ENV === "development" && (
+              <button
+                onClick={loadDemo}
+                disabled={busy}
+                className="mt-10 rounded-full border border-white/15 px-5 py-2 text-xs font-medium text-white/45 transition-colors hover:text-white/80 disabled:opacity-50"
+              >
+                🧪 {busy ? "loading demo…" : "Load a demo (testing)"}
+              </button>
+            )}
+            {error && <ErrorLine msg={error} />}
           </>
         );
 
