@@ -2,35 +2,63 @@
 
 _Last updated: 2026-07-28. Read this first when resuming work._
 
-## ⏭️ Next session (resume here)
+## ⏭️ Next session (resume here) — owner-set priorities
 
-**The dark re-skin is complete — every page** (onboarding, `/`, `/today`,
-`/timing`, `/calendar`, `/missions/[id]`, `/missions/new`, `/settings`,
-`/login`, nav pages) uses the dark aurora + glassmorphism system. The old light
-chrome (`components/nav.tsx`, `components/ui.tsx`, light layout header) is
-deleted. Shared dark chrome: `frontend/src/components/darkchrome.tsx`
-(`DarkShell`, `DarkNav`, `DarkStatusBadge`, `DarkTrajectoryBar`, `DayColumn`);
-tokens under `.ob-*` in `globals.css`. No native browser dialogs remain —
-"did more/less" (`/today`), material "update" and mission delete
-(`/missions/[id]`) are inline glass panels. The dev "Load a demo" testing
-button was removed by owner request. All on branch `onboarding-flow` → **PR #1**
-(not merged to main).
+1. **Timezones.** All dates are currently server-local; per-user timezone
+   handling is required before friends in different cities use it (a task that
+   flips at the server's midnight, not the user's, breaks the "today" promise).
+   Includes the known frontend inconsistency: `missions/[id]` marks TODAY via
+   UTC (`toISOString`) while `/calendar` uses local time.
+2. **Bug fix** — work the 2026-07-28 code-review list (details in the session
+   log below). Priority order inside this item: (a) calendar detail panel
+   claims "rest day" for selected days outside the fetched range; (b)
+   week↔month toggle snaps back to the last-clicked day's period; (c) no auth
+   guard on `/missions/new` → build one shared authed shell instead of per-page
+   copies; (d) light-mode dark flash on hard load + default 404 ignores theme
+   (pre-paint inline script + `not-found.tsx`); (e) redundant calendar
+   refetches / loading flash; (f) silent delete/save failures on mission
+   detail; (g) `next-env.d.ts` dev/build churn.
+3. **Proper data collection.** Minimal funnel instrumentation for the beta:
+   who finished onboarding, day-2/day-7 return, last-seen page — DB queries or
+   a tiny events table; no analytics SaaS at 10 users.
+4. **Deploy.** Env secrets (`ACADASSIST_SECRET`), SQLite→Postgres, HTTPS,
+   error logging, backups (Railway or similar). Then the 10-friend beta.
 
-Since then (2026-07-28, second pass): `/calendar` defaults to a **week view**
-(7 full day columns, all tasks visible, week nav) with a month-view toggle;
-**light mode is live** (DarkNav toggle, `goalassist_theme` in localStorage,
-`html[data-theme="light"]` + an invert/hue-rotate rule in `globals.css`);
-"Connect your calendar" copy is now **"Design your schedule"** (nothing ever
-connected a calendar); **all dev accounts were wiped** from `acadassist.db`.
+Backlog (agreed 2026-07-28 vision discussion, after the four above): day-one
+task guarantee (fresh sparse mission can show "Nothing scheduled today" —
+front-load ≥1 task on creation day), daily email reminder (the retention
+lever), mobile-web responsiveness pass + PWA manifest (no native apps —
+web-first, retention target 50% weekly over 30 days with 10 users decides
+everything), Milestone 2 (explain schedule changes). Premium is deferred until
+retention is proven; sketch: free = 1 active mission, premium = unlimited,
+never paywall the trajectory math, student pricing ~€3–4/mo, no ads ever.
 
-Open items:
-- **Empty day-one daily.** A fresh mission with sparse cadence (e.g. 32 units /
-  91 days) schedules the first task a few days out via cumulative rounding, so a
-  brand-new user can land on "Nothing scheduled today" right after onboarding —
-  undercuts the "heart of the product" moment. Decide: front-load day 1 / ensure
-  ≥1 task on creation vs. leave the honest spacing.
-- **Mobile responsiveness pass** — students live on phones; the glass pages are
-  desktop-first (calendar grids + materials rows are the tight spots).
+## 📋 Session log 2026-07-28
+
+Shipped (commits `6cdd7c0`, `8956874` on `onboarding-flow` → PR #1):
+- **Dark re-skin completed** across the whole app (mission detail, new
+  mission, calendar, settings, login); light chrome (`nav.tsx`, `ui.tsx`,
+  light layout header) deleted; `DarkStatusBadge`/`DarkTrajectoryBar` moved
+  into `darkchrome.tsx`.
+- **Every native browser dialog replaced** with inline glass editors
+  ("did more/less" on `/today`; material update + delete confirm on
+  `/missions/[id]`).
+- Dev "Load a demo (testing)" button removed (owner request).
+- **Calendar week view** (new default; 7 full day columns, week nav) with
+  month-view toggle.
+- **Light mode live**: DarkNav toggle, `goalassist_theme` in localStorage,
+  `html[data-theme=light] .ob-root { filter: invert(1) hue-rotate(180deg) }`.
+- Copy: "Connect your calendar" → **"Design your schedule"** (nudge + /timing).
+- **All accounts wiped** from `acadassist.db` (fresh start pre-beta).
+- Verified end-to-end with headless Chrome both rounds (15 + 12 checks).
+- **/code-review (high, 8 angles + verification) run on the branch**: 10
+  findings (9 CONFIRMED, 1 PLAUSIBLE) — now item 2 above. Also refuted:
+  `/today` log editor cannot double-submit (closes synchronously);
+  settings/calendar logged-out redirect to `/onboarding` is the documented
+  funnel decision, not a regression. Below-cap cleanup noted for later:
+  duplicated inline editors / loading placeholders / launch screens /
+  `glassInput` + `DAYS` constants; dead light `@theme` tokens with a stale
+  comment; three-state calendar anchor.
 
 ## One-liner
 
@@ -155,12 +183,11 @@ light redesign.
   `marizok1709-pixel/goalassist`.
 - [x] **Re-skin the whole app to the dark onboarding look** — DONE 2026-07-28
   (core loop 07-27; calendar/mission detail/new-mission/settings/login 07-28).
-1. Empty/loading/error states, mobile responsiveness pass (students live on
-   phones; current UI is desktop-first).
-2. Milestone 2 "Trusted": explain schedule *changes*, not just today's tasks.
-3. Deploy for 10 users: env secrets (`ACADASSIST_SECRET`), SQLite→Postgres,
-   HTTPS, error logging, backups; per-user timezone handling.
-4. Watch 10 users create a mission; every >5s hesitation is a UX bug.
+Current priorities live in "Next session" at the top (owner-set 2026-07-28:
+timezones → bug fix → data collection → deploy, then the beta). Standing
+principle for the beta: watch users create a mission; every >5s hesitation is
+a UX bug. Milestone 2 "Trusted" (explain schedule *changes*) stays on the
+backlog after the beta launches.
 
 ## Design direction (as of 2026-07-28)
 
