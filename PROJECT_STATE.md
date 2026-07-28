@@ -1,27 +1,31 @@
 # GoalAssist — Project State (handoff)
 
-_Last updated: 2026-07-27. Read this first when resuming work._
+_Last updated: 2026-07-28. Read this first when resuming work._
 
 ## ⏭️ Next session (resume here)
 
-Dark re-skin now covers **onboarding, dashboard (`/`), daily (`/today`), `/timing`,
-and the nav pages** (policies/support/about/social). Shared chrome lives in
-`frontend/src/components/darkchrome.tsx` (`DarkShell`, `DarkNav`, `DayColumn`);
-dark tokens under `.ob-*` in `globals.css`. All on branch `onboarding-flow` → **PR #1**
+**The dark re-skin is complete — every page** (onboarding, `/`, `/today`,
+`/timing`, `/calendar`, `/missions/[id]`, `/missions/new`, `/settings`,
+`/login`, nav pages) uses the dark aurora + glassmorphism system. The old light
+chrome (`components/nav.tsx`, `components/ui.tsx`, light layout header) is
+deleted. Shared dark chrome: `frontend/src/components/darkchrome.tsx`
+(`DarkShell`, `DarkNav`, `DarkStatusBadge`, `DarkTrajectoryBar`, `DayColumn`);
+tokens under `.ob-*` in `globals.css`. No native browser dialogs remain —
+"did more/less" (`/today`), material "update" and mission delete
+(`/missions/[id]`) are inline glass panels. The dev "Load a demo" testing
+button was removed by owner request. All on branch `onboarding-flow` → **PR #1**
 (not merged to main).
 
-**Still light (re-skin next):** `/calendar`, `/missions/[id]` (mission detail),
-`/missions/new`, `/settings`, `/login`. Also:
+Open items:
 - **Empty day-one daily.** A fresh mission with sparse cadence (e.g. 32 units /
   91 days) schedules the first task a few days out via cumulative rounding, so a
   brand-new user can land on "Nothing scheduled today" right after onboarding —
   undercuts the "heart of the product" moment. Decide: front-load day 1 / ensure
   ≥1 task on creation vs. leave the honest spacing.
-- **New-mission reuse.** `/missions/new` is still the old light wizard; the
-  onboarding flow only handles first-run (it registers). Build a dark
-  "new mission" path for authed users (skip register).
 - **"light mode" toggle** in `DarkNav` is still an inert placeholder (owner will
-  do later).
+  do later; light tokens kept in `globals.css` for it).
+- **Mobile responsiveness pass** — students live on phones; the glass pages are
+  desktop-first (calendar grid + materials rows are the tight spots).
 
 ## One-liner
 
@@ -92,35 +96,35 @@ absolute progress ("I'm on page 120"). `/goals/{id}/plan` (pace + reality),
 
 ## Frontend pages (all client components, JWT in localStorage)
 
-- `/onboarding` — **conversational first-run flow** (dark aurora + glassmorphism,
-  `motion/react` transitions). welcome → register → goal → deadline → materials →
-  how-far → availability → building → launch → `/today`. The only account path
-  that also sets weekly availability. Entry points funnel here: logged-out `/`
-  redirects here; old `/register` redirects here. Built to `designs/*.png`.
-  (Design language deliberately differs from the light pages below — the core
-  loop is slated to be re-skinned to match; see "Next session" up top.)
+All pages share the dark aurora + glassmorphism design language.
+
+- `/onboarding` — **conversational first-run flow** (`motion/react` transitions).
+  welcome → register → goal → deadline → materials → how-far → building →
+  launch → `/today`. Entry points funnel here: logged-out `/` redirects here;
+  old `/register` redirects here. Built to `designs/*.png`.
 - `/` Command Center — one dominant trajectory %, status badge, message,
   bar with expected-tick, TODAY'S MOVE + START; other missions as small cards.
 - `/today` — execution only: tasks w/ checkbox, **Why?** toggle, "did more/less"
-  logging, overshoot flash banner, Day Complete card with consequence-based
-  praise ladder (4 tiers by tasks done) + "Borrow tomorrow's work".
+  logging (inline glass panel, not a browser prompt), overshoot flash banner,
+  Day Complete card with consequence-based praise ladder (4 tiers by tasks
+  done) + "Borrow tomorrow's work".
 - `/calendar` — in-app month grid (Google Calendar was explicitly rejected):
   today circled, chips per day, missed = red, done = struck, day-detail panel.
 - `/missions/new` — single-page wizard (title/category/started/deadline +
   materials with "Done" starting point) → **Mission Launch** moment (serif
   title, big day-count, "you'll need", Start today →).
-- `/missions/[id]` — stat tiles, materials/pace table with "update" progress,
-  Next-14-days schedule, History (incl. missed).
+- `/missions/[id]` — glass stat tiles, materials/pace rows with inline "update"
+  editor, Next-14-days schedule, History (incl. missed), inline delete confirm.
 - `/settings` — profile + weekly availability (save = reschedule everything).
 
-## Design system (current implementation; Figma redesign in progress by owner)
+## Design system (current implementation)
 
-Light "Anthropic-inspired" theme, tokens in `frontend/src/app/globals.css`:
-page `#fafaf8`, surface `#fff`, line `#e4e3dd`, ink `#191917`/`#52514e`/`#8a887f`,
-**primary blue `#2a78d6`** (deep `#1c5cab`, wash `#eaf2fc`), good `#0b8a0b`,
-warning `#a16207`, critical `#c93838`. Serif display (Iowan/Georgia stack) for
-mission titles + hero numbers; system sans body; `tnum` class for aligned
-numerals. Status is never color-alone (icon + label always).
+**Dark aurora + glassmorphism everywhere**: aurora radial-gradient background,
+glass fields (`.ob-glass`), glass buttons (`.ob-btn`), bold sans type, white
+text at opacity steps (white → /85 → /70 → /50 → /45), status colors
+emerald-300 / amber-300 / red-300, `tnum` class for aligned numerals. Status is
+never color-alone (icon + label always). The old light-editorial tokens remain
+in `globals.css` `@theme` only for the future "light mode" toggle.
 
 ## Product rules (owner decisions — do not regress)
 
@@ -139,23 +143,22 @@ numerals. Status is never color-alone (icon + label always).
   (welcome screen). Availability now collected in-flow.
 - [x] `git init` + version control — DONE (commit `8c3d490`); GitHub remote
   `marizok1709-pixel/goalassist`.
-1. **Re-skin dashboard (`/`) + daily (`/today`) to the dark onboarding look**
-   ← NEXT SESSION. Then extend to `/calendar` and mission detail.
-2. Empty/loading/error states, mobile responsiveness pass (students live on
-   phones; current UI is desktop-first). Fold into the re-skin.
-3. Milestone 2 "Trusted": explain schedule *changes*, not just today's tasks.
-4. Deploy for 10 users: env secrets (`ACADASSIST_SECRET`), SQLite→Postgres,
+- [x] **Re-skin the whole app to the dark onboarding look** — DONE 2026-07-28
+  (core loop 07-27; calendar/mission detail/new-mission/settings/login 07-28).
+1. Empty/loading/error states, mobile responsiveness pass (students live on
+   phones; current UI is desktop-first).
+2. Milestone 2 "Trusted": explain schedule *changes*, not just today's tasks.
+3. Deploy for 10 users: env secrets (`ACADASSIST_SECRET`), SQLite→Postgres,
    HTTPS, error logging, backups; per-user timezone handling.
-5. Watch 10 users create a mission; every >5s hesitation is a UX bug.
+4. Watch 10 users create a mission; every >5s hesitation is a UX bug.
 
-## Design direction (as of 2026-07-27)
+## Design direction (as of 2026-07-28)
 
 The **dark/aurora/glassmorphism** system (bold sans, glass fields, `motion/react`
 transitions, tokens under `.ob-*` in `globals.css`, shared chrome in
-`components/darkchrome.tsx`, Figma exports in `designs/`) now covers onboarding,
-dashboard, daily, `/timing`, and the nav pages. The original **light editorial**
-theme still remains on `/calendar`, `/missions/[id]`, `/missions/new`,
-`/settings`, `/login` — to be migrated next. New deps: `motion`.
+`components/darkchrome.tsx`, Figma exports in `designs/`) now covers **every
+page**. The light editorial theme is retired from the UI; its tokens stay in
+`globals.css` only for the future light-mode toggle. New deps: `motion`.
 
 ## Verification habits
 

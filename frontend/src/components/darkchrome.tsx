@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { clearToken, getToken } from "@/lib/api";
+import { clearToken, getToken, TrajectoryStatus } from "@/lib/api";
 
 // Marketing nav from the Figma — now functional (each links to a real page).
 // "light mode" stays an inert placeholder for now (theme toggle comes later).
@@ -77,6 +77,50 @@ export function DarkShell({
     <div className="ob-root">
       <DarkNav />
       <main className={`mx-auto w-full px-6 pb-28 ${width}`}>{children}</main>
+    </div>
+  );
+}
+
+// Status colors tuned for the dark theme (icon + label always ship together).
+const DARK_STATUS: Record<TrajectoryStatus, { label: string; icon: string; cls: string }> = {
+  AHEAD: { label: "AHEAD", icon: "▲", cls: "text-emerald-300" },
+  ON_TRACK: { label: "ON TRACK", icon: "●", cls: "text-emerald-300" },
+  AT_RISK: { label: "AT RISK", icon: "◆", cls: "text-amber-300" },
+  OFF_TRACK: { label: "OFF TRACK", icon: "✕", cls: "text-red-300" },
+  FAILED: { label: "DEADLINE MISSED", icon: "✕", cls: "text-red-300" },
+  COMPLETED: { label: "COMPLETE", icon: "✓", cls: "text-emerald-300" },
+};
+
+export function DarkStatusBadge({ status }: { status: TrajectoryStatus }) {
+  const s = DARK_STATUS[status];
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest ${s.cls}`}>
+      <span aria-hidden>{s.icon}</span>
+      {s.label}
+    </span>
+  );
+}
+
+/** Progress bar with a tick marking where you SHOULD be today. */
+export function DarkTrajectoryBar({ actualPct, expectedPct }: { actualPct: number; expectedPct: number }) {
+  return (
+    <div>
+      <div className="relative h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${Math.min(actualPct, 100)}%` }} />
+        <div
+          className="absolute inset-y-0 w-0.5 bg-white/70"
+          style={{ left: `calc(${Math.min(expectedPct, 100)}% - 1px)` }}
+          title={`Expected today: ${expectedPct.toFixed(0)}%`}
+        />
+      </div>
+      <div className="mt-1.5 flex justify-between text-[11px] text-white/45">
+        <span>
+          <span className="text-white/70 tnum">{actualPct.toFixed(0)}%</span> done
+        </span>
+        <span>
+          expected <span className="tnum">{expectedPct.toFixed(0)}%</span>
+        </span>
+      </div>
     </div>
   );
 }

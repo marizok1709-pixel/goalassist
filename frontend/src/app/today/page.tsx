@@ -44,6 +44,8 @@ export default function TodayPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [praise, setPraise] = useState<string | null>(null);
   const [whyOpen, setWhyOpen] = useState<number | null>(null);
+  const [logOpen, setLogOpen] = useState<number | null>(null);
+  const [logValue, setLogValue] = useState("");
 
   const load = useCallback(() => api.today().then(setData).catch(() => {}), []);
 
@@ -84,14 +86,20 @@ export default function TodayPage() {
     }
   }
 
-  function logActual(task: ScheduledTask) {
-    const raw = window.prompt(
-      `Planned: ${task.quantity}. How much did you actually do?`,
-      String(task.quantity)
-    );
-    if (raw === null) return;
-    const value = Number(raw);
-    if (Number.isNaN(value) || value < 0) return;
+  function toggleLog(task: ScheduledTask) {
+    if (logOpen === task.id) {
+      setLogOpen(null);
+      return;
+    }
+    setLogValue(String(task.quantity));
+    setLogOpen(task.id);
+    setWhyOpen(null);
+  }
+
+  function submitLog(task: ScheduledTask) {
+    const value = Number(logValue);
+    if (logValue.trim() === "" || Number.isNaN(value) || value < 0) return;
+    setLogOpen(null);
     finishTask(task, true, value);
   }
 
@@ -204,16 +212,19 @@ export default function TodayPage() {
                           <>
                             {t.why && (
                               <button
-                                onClick={() => setWhyOpen(whyOpen === t.id ? null : t.id)}
+                                onClick={() => {
+                                  setWhyOpen(whyOpen === t.id ? null : t.id);
+                                  setLogOpen(null);
+                                }}
                                 className={`shrink-0 text-xs ${whyOpen === t.id ? "text-white" : "text-white/50 hover:text-white"}`}
                               >
                                 Why?
                               </button>
                             )}
                             <button
-                              onClick={() => logActual(t)}
+                              onClick={() => toggleLog(t)}
                               title="Did more or less than planned? Log the real amount"
-                              className="shrink-0 text-xs text-white/50 hover:text-white"
+                              className={`shrink-0 text-xs ${logOpen === t.id ? "text-white" : "text-white/50 hover:text-white"}`}
                             >
                               did more/less
                             </button>
@@ -224,6 +235,40 @@ export default function TodayPage() {
                         <p className="border-t border-white/10 bg-white/[0.04] px-4 py-2.5 text-[13px] leading-relaxed text-white/70">
                           {t.why}
                         </p>
+                      )}
+                      {logOpen === t.id && (
+                        <div className="border-t border-white/10 bg-white/[0.04] px-4 py-3">
+                          <p className="text-[13px] text-white/70">
+                            Planned: <span className="tnum">{t.quantity}</span>. How much did you actually do?
+                          </p>
+                          <div className="mt-2.5 flex items-center gap-2.5">
+                            <input
+                              autoFocus
+                              type="number"
+                              min="0"
+                              value={logValue}
+                              onChange={(e) => setLogValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") submitLog(t);
+                                if (e.key === "Escape") setLogOpen(null);
+                              }}
+                              className="ob-glass w-28 rounded-xl px-4 py-2 text-center text-sm text-white tnum"
+                            />
+                            <button
+                              onClick={() => submitLog(t)}
+                              disabled={busy === t.id || logValue.trim() === "" || Number(logValue) < 0 || Number.isNaN(Number(logValue))}
+                              className="ob-btn rounded-xl px-5 py-2 text-xs font-semibold disabled:opacity-40"
+                            >
+                              Log it
+                            </button>
+                            <button
+                              onClick={() => setLogOpen(null)}
+                              className="text-xs text-white/50 hover:text-white"
+                            >
+                              cancel
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </li>
                   ))}

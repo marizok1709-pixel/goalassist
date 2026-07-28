@@ -3,14 +3,7 @@
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import { api, Plan, ScheduledTask } from "@/lib/api";
-import {
-  btnGhost,
-  RealityPanel,
-  Spinner,
-  StatTile,
-  StatusBadge,
-  TrajectoryBar,
-} from "@/components/ui";
+import { DarkShell, DarkStatusBadge, DarkTrajectoryBar } from "@/components/darkchrome";
 
 export default function MissionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -21,6 +14,10 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
   const [history, setHistory] = useState<ScheduledTask[]>([]);
   const [schedule, setSchedule] = useState<ScheduledTask[]>([]);
   const [tab, setTab] = useState<"schedule" | "history">("schedule");
+  const [editOpen, setEditOpen] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [p, h, s] = await Promise.all([
@@ -37,149 +34,242 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
     load().catch(() => router.push("/"));
   }, [load, router]);
 
-  if (!plan) return <Spinner />;
+  if (!plan) {
+    return (
+      <DarkShell width="max-w-3xl">
+        <p className="py-24 text-center text-white/50">loading…</p>
+      </DarkShell>
+    );
+  }
 
   const r = plan.reality;
 
-  async function updateProgress(materialId: number, name: string, unit: string, total: number) {
-    const raw = window.prompt(`Where are you in "${name}"? Completed ${unit} (of ${total}):`);
-    if (raw === null) return;
-    const value = Number(raw);
-    if (Number.isNaN(value) || value < 0) return;
-    await api.setMaterialProgress(goalId, materialId, value);
-    await load();
+  function toggleEdit(materialId: number, completed: number) {
+    if (editOpen === materialId) {
+      setEditOpen(null);
+      return;
+    }
+    setEditValue(String(completed));
+    setEditOpen(materialId);
+  }
+
+  async function submitEdit(materialId: number) {
+    const value = Number(editValue);
+    if (editValue.trim() === "" || Number.isNaN(value) || value < 0) return;
+    setBusy(true);
+    try {
+      await api.setMaterialProgress(goalId, materialId, value);
+      setEditOpen(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function deleteMission() {
-    if (!window.confirm(`Delete mission "${plan?.goal.title}" and all its data?`)) return;
-    await api.deleteGoal(goalId);
-    router.push("/");
+    setBusy(true);
+    try {
+      await api.deleteGoal(goalId);
+      router.push("/");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <div>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-widest text-ink-muted">
-            Mission {plan.goal.category ? `· ${plan.goal.category}` : ""}
-          </p>
-          <h1 className="mt-0.5 font-serif text-3xl font-semibold text-ink">{plan.goal.title}</h1>
+    <DarkShell width="max-w-3xl">
+      <div className="pt-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+              Mission{plan.goal.category ? ` · ${plan.goal.category}` : ""}
+            </p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-white">{plan.goal.title}</h1>
+          </div>
+          <div className="pt-1">
+            <DarkStatusBadge status={r.status} />
+          </div>
         </div>
-        <StatusBadge status={r.status} />
-      </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Days left" value={String(r.days_remaining)} sub={`of ${r.days_total}`} />
-        <StatTile label="Progress" value={`${r.actual_progress_pct.toFixed(0)}%`} />
-        <StatTile label="Expected" value={`${r.expected_progress_pct.toFixed(0)}%`} />
-        <StatTile
-          label="Trajectory"
-          value={`${(r.trajectory_ratio * 100).toFixed(0)}%`}
-          sub="actual / expected"
-        />
-      </div>
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label="Days left" value={String(r.days_remaining)} sub={`of ${r.days_total}`} />
+          <StatTile label="Progress" value={`${r.actual_progress_pct.toFixed(0)}%`} />
+          <StatTile label="Expected" value={`${r.expected_progress_pct.toFixed(0)}%`} />
+          <StatTile
+            label="Trajectory"
+            value={`${(r.trajectory_ratio * 100).toFixed(0)}%`}
+            sub="actual / expected"
+          />
+        </div>
 
-      <div className="mt-5">
-        <TrajectoryBar actualPct={r.actual_progress_pct} expectedPct={r.expected_progress_pct} />
-      </div>
+        <div className="mt-6">
+          <DarkTrajectoryBar actualPct={r.actual_progress_pct} expectedPct={r.expected_progress_pct} />
+        </div>
 
-      <div className="mt-5">
-        <RealityPanel reality={r} />
-      </div>
-
-      <section className="mt-8">
-        <p className="font-mono text-[11px] uppercase tracking-widest text-ink-muted">
-          Materials · required pace
-        </p>
-        <div className="mt-2 overflow-x-auto rounded-lg border border-line">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line bg-surface text-left font-mono text-[11px] uppercase tracking-wider text-ink-muted">
-                <th className="px-4 py-2 font-medium">Material</th>
-                <th className="px-4 py-2 font-medium text-right">Done</th>
-                <th className="px-4 py-2 font-medium text-right">Required pace</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {plan.materials.map((m) => (
-                <tr key={m.material_id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5 text-ink">{m.name}</td>
-                  <td className="px-4 py-2.5 text-right text-ink-2 tnum">
-                    {m.completed} / {m.total} {m.unit}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-xs text-accent">
-                    {m.human_rate}
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button
-                      onClick={() => updateProgress(m.material_id, m.name, m.unit, m.total)}
-                      className="font-mono text-[11px] text-ink-muted hover:text-accent"
-                    >
-                      update
-                    </button>
-                  </td>
-                </tr>
+        <div className="ob-glass mt-6 rounded-2xl px-5 py-4">
+          <p className="text-sm text-white/80">{r.message}</p>
+          {r.adjustments.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {r.adjustments.map((a) => (
+                <li key={a} className="text-sm text-amber-300">→ {a}</li>
               ))}
-              {plan.materials.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-ink-muted">
-                    No materials yet — add them when creating the mission.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setTab("schedule")}
-            className={`${btnGhost} ${tab === "schedule" ? "border-accent text-ink" : ""}`}
-          >
-            Next 14 days
-          </button>
-          <button
-            onClick={() => setTab("history")}
-            className={`${btnGhost} ${tab === "history" ? "border-accent text-ink" : ""}`}
-          >
-            History
-          </button>
+            </ul>
+          )}
         </div>
 
-        {tab === "schedule" ? (
-          <ScheduleList tasks={schedule} />
-        ) : (
-          <ul className="mt-3 space-y-1">
-            {history.map((t) => (
-              <li key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 text-sm">
-                <span className="font-mono text-[11px] text-ink-muted tnum">{t.date}</span>
-                <span className={t.completed ? "text-good" : "text-critical"} aria-hidden>
-                  {t.completed ? "✓" : "✕"}
-                </span>
-                <span className={t.completed ? "text-ink-2" : "text-ink-muted"}>
-                  {t.description}
-                  {!t.completed && " — missed"}
-                </span>
+        <section className="mt-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+            Materials · required pace
+          </p>
+          <ul className="mt-3 space-y-2">
+            {plan.materials.map((m) => (
+              <li key={m.material_id} className="ob-glass overflow-hidden rounded-2xl">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5">
+                  <span className="flex-1 text-[15px] text-white">{m.name}</span>
+                  <span className="text-sm text-white/60 tnum">
+                    {m.completed} / {m.total} {m.unit}
+                  </span>
+                  <span className="text-xs text-white/85 tnum">{m.human_rate}</span>
+                  <button
+                    onClick={() => toggleEdit(m.material_id, m.completed)}
+                    className={`text-xs ${editOpen === m.material_id ? "text-white" : "text-white/50 hover:text-white"}`}
+                  >
+                    update
+                  </button>
+                </div>
+                {editOpen === m.material_id && (
+                  <div className="border-t border-white/10 bg-white/[0.04] px-5 py-3">
+                    <p className="text-[13px] text-white/70">
+                      Where are you in &quot;{m.name}&quot;? Completed {m.unit} of {m.total}:
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-2.5">
+                      <input
+                        autoFocus
+                        type="number"
+                        min="0"
+                        max={m.total}
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") submitEdit(m.material_id);
+                          if (e.key === "Escape") setEditOpen(null);
+                        }}
+                        className="ob-glass w-28 rounded-xl px-4 py-2 text-center text-sm text-white tnum"
+                      />
+                      <button
+                        onClick={() => submitEdit(m.material_id)}
+                        disabled={busy || editValue.trim() === "" || Number(editValue) < 0 || Number.isNaN(Number(editValue))}
+                        className="ob-btn rounded-xl px-5 py-2 text-xs font-semibold disabled:opacity-40"
+                      >
+                        Save
+                      </button>
+                      <button onClick={() => setEditOpen(null)} className="text-xs text-white/50 hover:text-white">
+                        cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
-            {history.length === 0 && (
-              <li className="py-4 text-sm text-ink-muted">
-                No past days yet. History appears tomorrow.
+            {plan.materials.length === 0 && (
+              <li className="ob-glass rounded-2xl px-5 py-6 text-center text-sm text-white/50">
+                No materials yet — add them when creating the mission.
               </li>
             )}
           </ul>
-        )}
-      </section>
+        </section>
 
-      <div className="mt-12 border-t border-line pt-4">
-        <button onClick={deleteMission} className="text-xs text-ink-muted hover:text-critical">
-          Delete mission
-        </button>
+        <section className="mt-10">
+          <div className="flex gap-2">
+            <TabButton active={tab === "schedule"} onClick={() => setTab("schedule")}>
+              Next 14 days
+            </TabButton>
+            <TabButton active={tab === "history"} onClick={() => setTab("history")}>
+              History
+            </TabButton>
+          </div>
+
+          {tab === "schedule" ? (
+            <ScheduleList tasks={schedule} />
+          ) : (
+            <ul className="mt-4 space-y-1">
+              {history.map((t) => (
+                <li key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 text-sm">
+                  <span className="text-xs text-white/45 tnum">{t.date}</span>
+                  <span className={t.completed ? "text-emerald-300" : "text-red-300"} aria-hidden>
+                    {t.completed ? "✓" : "✕"}
+                  </span>
+                  <span className={t.completed ? "text-white/75" : "text-white/45"}>
+                    {t.description}
+                    {!t.completed && " — missed"}
+                  </span>
+                </li>
+              ))}
+              {history.length === 0 && (
+                <li className="py-4 text-sm text-white/50">No past days yet. History appears tomorrow.</li>
+              )}
+            </ul>
+          )}
+        </section>
+
+        <div className="mt-14 border-t border-white/10 pt-5">
+          {confirmDelete ? (
+            <div className="ob-glass flex flex-wrap items-center justify-between gap-3 rounded-2xl px-5 py-4">
+              <p className="text-sm text-white/85">
+                Delete <span className="font-semibold">&quot;{plan.goal.title}&quot;</span> and all its data?
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={deleteMission}
+                  disabled={busy}
+                  className="rounded-xl border border-red-400/40 bg-red-400/10 px-5 py-2 text-xs font-semibold text-red-300 transition-colors hover:bg-red-400/20 disabled:opacity-50"
+                >
+                  {busy ? "…" : "Delete forever"}
+                </button>
+                <button onClick={() => setConfirmDelete(false)} className="text-xs text-white/50 hover:text-white">
+                  keep it
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} className="text-xs text-white/40 hover:text-red-300">
+              Delete mission
+            </button>
+          )}
+        </div>
       </div>
+    </DarkShell>
+  );
+}
+
+function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="ob-glass rounded-2xl px-4 py-3">
+      <div className="text-[11px] font-semibold uppercase tracking-widest text-white/50">{label}</div>
+      <div className="mt-1 text-2xl font-bold text-white tnum">{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-white/50">{sub}</div>}
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl px-4 py-2 text-sm transition-colors ${
+        active ? "ob-btn font-semibold" : "text-white/55 hover:text-white"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -189,17 +279,15 @@ function ScheduleList({ tasks }: { tasks: ScheduledTask[] }) {
     byDate.set(t.date, [...(byDate.get(t.date) ?? []), t]);
   }
   if (byDate.size === 0) {
-    return <p className="mt-3 py-4 text-sm text-ink-muted">Nothing scheduled — add materials.</p>;
+    return <p className="mt-4 py-4 text-sm text-white/50">Nothing scheduled — add materials.</p>;
   }
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <div className="mt-3 space-y-2">
+    <div className="mt-4 space-y-2">
       {[...byDate.entries()].map(([date, dayTasks]) => (
-        <div key={date} className="flex gap-3 rounded-md px-2 py-1.5">
+        <div key={date} className="flex gap-3 px-2 py-1.5">
           <span
-            className={`w-24 shrink-0 font-mono text-[11px] tnum ${
-              date === today ? "text-accent" : "text-ink-muted"
-            }`}
+            className={`w-24 shrink-0 text-xs tnum ${date === today ? "font-semibold text-white" : "text-white/45"}`}
           >
             {date === today
               ? "TODAY"
@@ -211,10 +299,7 @@ function ScheduleList({ tasks }: { tasks: ScheduledTask[] }) {
           </span>
           <div className="flex-1 space-y-0.5">
             {dayTasks.map((t) => (
-              <p
-                key={t.id}
-                className={`text-sm ${t.completed ? "text-ink-muted line-through" : "text-ink-2"}`}
-              >
+              <p key={t.id} className={`text-sm ${t.completed ? "text-white/40 line-through" : "text-white/80"}`}>
                 {t.description}
               </p>
             ))}

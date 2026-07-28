@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Nav } from "@/components/nav";
 
 export const metadata: Metadata = {
   title: "GoalAssist — daily certainty for academic deadlines",
@@ -15,10 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="bg-page text-ink min-h-full flex flex-col">
-        <Nav />
-        <main className="mx-auto w-full max-w-4xl flex-1 px-4 pb-24 pt-8">{children}</main>
-      </body>
+      <body className="min-h-full bg-[#050506] text-white">{children}</body>
     </html>
   );
 }

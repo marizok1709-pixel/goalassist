@@ -7,10 +7,21 @@ engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 ## 2026-07-28
 
 ### Added
-- **Dev testing button.** A "🧪 Load a demo (testing)" button on the onboarding
-  welcome screen (development builds only) seeds a fresh account with a dense
-  mission whose tasks land *today*, then drops straight into `/today` — one
-  click to a fully populated app for testing. Gated on `NODE_ENV === "development"`.
+- **Dark re-skin complete.** The last light pages — mission detail
+  (`/missions/[id]`), `/missions/new`, `/calendar`, `/settings`, `/login` — now
+  use the dark aurora + glassmorphism system. The whole product is one design
+  language; the old light-editorial chrome (`components/nav.tsx`,
+  `components/ui.tsx`) is deleted and the root layout no longer renders a
+  light header.
+- **Glass inline editors replace every native browser dialog.** "did more/less"
+  on `/today` and "update" on mission detail open an inline glass panel
+  (number input + Log it/Save, Enter/Escape work); "Delete mission" shows an
+  inline glass confirmation instead of `window.confirm`. No more default
+  browser popups anywhere.
+
+### Removed
+- **Dev testing button.** The "🧪 Load a demo (testing)" button added earlier
+  today is gone again — not needed now that onboarding is fast to click through.
 
 ### Fixed
 - **Silent failure on mission build.** If creating the goal/materials failed at

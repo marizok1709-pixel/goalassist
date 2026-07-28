@@ -26,9 +26,11 @@
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+/* The whole product now lives in the dark aurora theme; the light tokens above
+   stay for the future "light mode" toggle. */
 html {
-  background: var(--color-page);
-  color: var(--color-ink);
+  background: #050506;
+  color: #fff;
 }
 
 body {

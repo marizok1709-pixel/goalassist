@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { api, Dashboard, DashboardGoal, getToken, TrajectoryStatus } from "@/lib/api";
-import { DarkShell } from "@/components/darkchrome";
+import { api, Dashboard, DashboardGoal, getToken } from "@/lib/api";
+import { DarkShell, DarkStatusBadge, DarkTrajectoryBar } from "@/components/darkchrome";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -23,26 +23,6 @@ const SEVERITY: Record<string, number> = {
   AHEAD: 4,
   COMPLETED: 5,
 };
-
-// Status colors tuned for the dark theme (icon + label always ship together).
-const DARK_STATUS: Record<TrajectoryStatus, { label: string; icon: string; cls: string }> = {
-  AHEAD: { label: "AHEAD", icon: "▲", cls: "text-emerald-300" },
-  ON_TRACK: { label: "ON TRACK", icon: "●", cls: "text-emerald-300" },
-  AT_RISK: { label: "AT RISK", icon: "◆", cls: "text-amber-300" },
-  OFF_TRACK: { label: "OFF TRACK", icon: "✕", cls: "text-red-300" },
-  FAILED: { label: "DEADLINE MISSED", icon: "✕", cls: "text-red-300" },
-  COMPLETED: { label: "COMPLETE", icon: "✓", cls: "text-emerald-300" },
-};
-
-function DarkStatusBadge({ status }: { status: TrajectoryStatus }) {
-  const s = DARK_STATUS[status];
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest ${s.cls}`}>
-      <span aria-hidden>{s.icon}</span>
-      {s.label}
-    </span>
-  );
-}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -177,7 +157,7 @@ function HeroMission({ g }: { g: DashboardGoal }) {
       </div>
 
       <div className="mt-8">
-        <TrajectoryBar actualPct={r.actual_progress_pct} expectedPct={r.expected_progress_pct} />
+        <DarkTrajectoryBar actualPct={r.actual_progress_pct} expectedPct={r.expected_progress_pct} />
       </div>
 
       {/* Today's move */}
@@ -203,29 +183,6 @@ function HeroMission({ g }: { g: DashboardGoal }) {
         </Link>
       </div>
     </motion.section>
-  );
-}
-
-function TrajectoryBar({ actualPct, expectedPct }: { actualPct: number; expectedPct: number }) {
-  return (
-    <div>
-      <div className="relative h-2 overflow-hidden rounded-full bg-white/10">
-        <div className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${Math.min(actualPct, 100)}%` }} />
-        <div
-          className="absolute inset-y-0 w-0.5 bg-white/70"
-          style={{ left: `calc(${Math.min(expectedPct, 100)}% - 1px)` }}
-          title={`Expected today: ${expectedPct.toFixed(0)}%`}
-        />
-      </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-white/45">
-        <span>
-          <span className="text-white/70 tnum">{actualPct.toFixed(0)}%</span> done
-        </span>
-        <span>
-          expected <span className="tnum">{expectedPct.toFixed(0)}%</span>
-        </span>
-      </div>
-    </div>
   );
 }
 
