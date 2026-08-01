@@ -4,3 +4,4 @@ sqlalchemy
 pyjwt
 pydantic[email]
 httpx
+psycopg[binary]
