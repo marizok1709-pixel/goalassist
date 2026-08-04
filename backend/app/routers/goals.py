@@ -13,6 +13,7 @@ from ..schemas import (
     GoalOut,
     GoalUpdate,
     MaterialCreate,
+    MaterialEdit,
     MaterialOut,
     MaterialProgressUpdate,
     ProgressUnitCreate,
@@ -87,11 +88,24 @@ CONTINUOUS_UNITS = {
 MAX_PIECES = 100
 
 
+def _is_countable(material: Material) -> bool:
+    total = material.total_quantity
+    unit_l = material.unit.strip().lower()
+    return unit_l not in CONTINUOUS_UNITS and float(total).is_integer() and 1 <= total <= MAX_PIECES
+
+
+def _unit_title(material: Material, position: int) -> str:
+    """The title a unit at `position` should carry for this material."""
+    if not _is_countable(material):
+        return material.name
+    singular = material.unit.rstrip("s") or material.unit
+    return f"{material.name}: {singular} #{position + 1}"
+
+
 def _auto_slice(material: Material) -> list[ProgressUnit]:
     """Slice a material into progress units automatically — no user input."""
     total = material.total_quantity
-    unit_l = material.unit.strip().lower()
-    countable = unit_l not in CONTINUOUS_UNITS and float(total).is_integer() and 1 <= total <= MAX_PIECES
+    countable = _is_countable(material)
     if countable:
         singular = material.unit.rstrip("s") or material.unit
         return [
@@ -172,6 +186,70 @@ def update_material_progress(
         unit = db.get(ProgressUnit, task.progress_unit_id) if task.progress_unit_id else None
         task.completed = bool(unit and unit.is_completed)
     db.flush()
+    engine.rebuild_schedule(db, goal, today)
+    db.commit()
+    db.refresh(material)
+    return material
+
+
+@router.put("/{goal_id}/materials/{material_id}", response_model=MaterialOut)
+def edit_material(
+    material_id: int,
+    payload: MaterialEdit,
+    goal: Goal = Depends(get_own_goal),
+    db: Session = Depends(get_db),
+):
+    """Correct a material after the mission was created (typo'd name, wrong
+    page count, wrong unit). Materials were previously write-once, which left
+    users stuck with whatever they typed during onboarding.
+    """
+    material = db.get(Material, material_id)
+    if material is None or material.goal_id != goal.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Material not found")
+
+    # How much is done today, so it survives whatever we do to the slicing.
+    done = sum(u.completed_quantity for u in material.progress_units)
+
+    reslice = (
+        payload.total_quantity is not None and payload.total_quantity != material.total_quantity
+    ) or (payload.unit is not None and payload.unit.strip() != material.unit)
+
+    if payload.name is not None:
+        material.name = payload.name.strip()
+    if payload.total_quantity is not None:
+        material.total_quantity = payload.total_quantity
+    if payload.unit is not None:
+        material.unit = payload.unit.strip()
+
+    today = datetime.now().date()
+
+    if reslice:
+        # Amount/unit changed → the old units no longer describe the work.
+        # Completed *past* tasks stay as honest history; they just lose their
+        # link to units that no longer exist (the column is nullable).
+        old_unit_ids = [u.id for u in material.progress_units]
+        if old_unit_ids:
+            for task in db.scalars(
+                select(ScheduledTask).where(ScheduledTask.progress_unit_id.in_(old_unit_ids))
+            ):
+                task.progress_unit_id = None
+        for unit in list(material.progress_units):
+            db.delete(unit)
+        db.flush()
+        db.refresh(material)
+        db.add_all(_auto_slice(material))
+        db.flush()
+        db.refresh(material)
+        engine.apply_progress(material, min(done, material.total_quantity), absolute=True)
+    else:
+        # Rename only — keep the units (and their completed_at history) and
+        # just re-derive their titles from the new name.
+        for unit in material.progress_units:
+            unit.title = _unit_title(material, unit.position)
+            unit.unit = material.unit
+
+    db.flush()
+    db.refresh(goal)
     engine.rebuild_schedule(db, goal, today)
     db.commit()
     db.refresh(material)

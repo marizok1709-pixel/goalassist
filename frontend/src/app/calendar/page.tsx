@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, CalendarTask, getToken } from "@/lib/api";
 import { DarkShell } from "@/components/darkchrome";
+import { PageLoading } from "@/components/ui";
 
 function iso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
@@ -104,28 +105,28 @@ export default function CalendarPage() {
     <DarkShell width="max-w-4xl">
       <div className="pt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-white tnum">{title}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink tnum">{title}</h1>
           <div className="flex gap-1.5">
             <button
               onClick={() => switchView(view === "week" ? "month" : "week")}
-              className="ob-btn rounded-xl px-3.5 py-1.5 text-sm"
+              className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm"
             >
               {view === "week" ? "month view" : "week view"}
             </button>
             <button
               onClick={() => shift(-1)}
               aria-label={view === "week" ? "Previous week" : "Previous month"}
-              className="ob-btn rounded-xl px-3.5 py-1.5 text-sm"
+              className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm"
             >
               ←
             </button>
-            <button onClick={goToday} className="ob-btn rounded-xl px-3.5 py-1.5 text-sm">
+            <button onClick={goToday} className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm">
               Today
             </button>
             <button
               onClick={() => shift(1)}
               aria-label={view === "week" ? "Next week" : "Next month"}
-              className="ob-btn rounded-xl px-3.5 py-1.5 text-sm"
+              className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm"
             >
               →
             </button>
@@ -133,7 +134,7 @@ export default function CalendarPage() {
         </div>
 
         {!tasks ? (
-          <p className="py-24 text-center text-white/50">loading…</p>
+          <PageLoading />
         ) : view === "week" ? (
           <WeekGrid
             weekStart={weekStart}
@@ -154,7 +155,7 @@ export default function CalendarPage() {
         )}
 
         <section className="mt-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-muted">
             {new Date(`${selected}T00:00:00`).toLocaleDateString("en-US", {
               weekday: "long",
               month: "long",
@@ -162,23 +163,23 @@ export default function CalendarPage() {
             })}
           </p>
           {selectedTasks.length === 0 ? (
-            <p className="mt-2 text-sm text-white/50">Nothing scheduled — rest day.</p>
+            <p className="mt-2 text-sm text-ink-muted">Nothing scheduled — rest day.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {selectedTasks.map((t) => (
                 <li key={t.id} className="ob-glass flex items-center gap-2.5 rounded-2xl px-4 py-3 text-sm">
                   <span
                     className={
-                      t.completed ? "text-emerald-300" : t.date < todayIso ? "text-red-300" : "text-white/50"
+                      t.completed ? "text-good" : t.date < todayIso ? "text-bad" : "text-ink-muted"
                     }
                     aria-hidden
                   >
                     {t.completed ? "✓" : t.date < todayIso ? "✕" : "○"}
                   </span>
-                  <span className={t.completed ? "text-white/45 line-through" : "text-white"}>
+                  <span className={t.completed ? "text-ink-muted line-through" : "text-ink"}>
                     {t.description}
                   </span>
-                  <span className="ml-auto shrink-0 text-[11px] text-white/45">{t.goal_title}</span>
+                  <span className="ml-auto shrink-0 text-[11px] text-ink-muted">{t.goal_title}</span>
                 </li>
               ))}
             </ul>
@@ -219,17 +220,17 @@ function WeekGrid({
             onClick={() => onSelect(date)}
             className={`flex min-h-64 flex-col rounded-xl border p-2 text-left transition-colors ${
               isSelected
-                ? "border-white/40 bg-white/[0.14]"
-                : "border-white/10 bg-white/[0.05] hover:bg-white/[0.1]"
+                ? "border-veil/40 bg-veil/[0.14]"
+                : "border-veil/10 bg-veil/[0.05] hover:bg-veil/[0.1]"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
                 {d.toLocaleDateString("en-US", { weekday: "short" })}
               </span>
               <span
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs tnum ${
-                  isToday ? "bg-white font-semibold text-black" : "text-white/70"
+                  isToday ? "bg-accent font-semibold text-accent-contrast" : "text-ink-2"
                 }`}
               >
                 {d.getDate()}
@@ -241,19 +242,19 @@ function WeekGrid({
                   key={t.id}
                   className={`rounded px-1.5 py-1 text-[11px] leading-snug ${
                     t.completed
-                      ? "bg-white/[0.04] text-white/40 line-through"
+                      ? "bg-veil/[0.04] text-ink-muted line-through"
                       : missed && !t.completed
-                        ? "bg-red-400/15 text-red-300"
-                        : "bg-white/10 text-white/85"
+                        ? "bg-bad/15 text-bad"
+                        : "bg-veil/10 text-ink"
                   }`}
                 >
                   {t.description}
                 </p>
               ))}
-              {dayTasks.length === 0 && <p className="px-1.5 text-[11px] text-white/30">rest</p>}
+              {dayTasks.length === 0 && <p className="px-1.5 text-[11px] text-ink-muted">rest</p>}
             </div>
             {dayTasks.length > 0 && (
-              <p className="mt-auto pt-2 text-[10px] text-white/40 tnum">
+              <p className="mt-auto pt-2 text-[10px] text-ink-muted tnum">
                 {done}/{dayTasks.length} done
               </p>
             )}
@@ -291,7 +292,7 @@ function MonthGrid({
       {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
         <div
           key={d}
-          className="px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-white/45"
+          className="px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-ink-muted"
         >
           {d}
         </div>
@@ -309,13 +310,13 @@ function MonthGrid({
             onClick={() => onSelect(date)}
             className={`min-h-20 rounded-xl border p-1.5 text-left align-top transition-colors ${
               isSelected
-                ? "border-white/40 bg-white/[0.14]"
-                : "border-white/10 bg-white/[0.05] hover:bg-white/[0.1]"
+                ? "border-veil/40 bg-veil/[0.14]"
+                : "border-veil/10 bg-veil/[0.05] hover:bg-veil/[0.1]"
             }`}
           >
             <span
               className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs tnum ${
-                isToday ? "bg-white font-semibold text-black" : "text-white/70"
+                isToday ? "bg-accent font-semibold text-accent-contrast" : "text-ink-2"
               }`}
             >
               {Number(date.slice(8))}
@@ -326,17 +327,17 @@ function MonthGrid({
                   key={t.id}
                   className={`truncate rounded px-1 py-0.5 text-[10px] leading-tight ${
                     t.completed
-                      ? "bg-white/[0.04] text-white/40 line-through"
+                      ? "bg-veil/[0.04] text-ink-muted line-through"
                       : missed
-                        ? "bg-red-400/15 text-red-300"
-                        : "bg-white/10 text-white/85"
+                        ? "bg-bad/15 text-bad"
+                        : "bg-veil/10 text-ink"
                   }`}
                 >
                   {t.description}
                 </p>
               ))}
               {dayTasks.length > 2 && (
-                <p className="px-1 text-[10px] text-white/45">+{dayTasks.length - 2} more</p>
+                <p className="px-1 text-[10px] text-ink-muted">+{dayTasks.length - 2} more</p>
               )}
             </div>
           </button>

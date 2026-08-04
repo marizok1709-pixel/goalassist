@@ -7,7 +7,7 @@ export default function AboutPage() {
     <DarkShell>
       <div className="pt-10">
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">About Goal Assist</h1>
-        <div className="mt-6 space-y-4 text-lg leading-relaxed text-white/70">
+        <div className="mt-6 space-y-4 text-lg leading-relaxed text-ink-2">
           <p>
             Goal Assist turns long-term academic deadlines into daily certainty. You give it a real
             goal, a hard deadline, and the actual material behind it — a textbook, a stack of mock

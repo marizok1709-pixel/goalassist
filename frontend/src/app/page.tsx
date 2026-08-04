@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { api, Dashboard, DashboardGoal, getToken } from "@/lib/api";
 import { DarkShell, DarkStatusBadge, DarkTrajectoryBar } from "@/components/darkchrome";
+import { PageLoading } from "@/components/ui";
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -39,7 +40,7 @@ export default function DashboardPage() {
   if (!data) {
     return (
       <DarkShell>
-        <p className="py-24 text-center text-white/50">loading…</p>
+        <PageLoading />
       </DarkShell>
     );
   }
@@ -57,7 +58,7 @@ export default function DashboardPage() {
   return (
     <DarkShell>
       <div className="pt-6">
-        <p className="text-xs font-semibold tracking-[0.25em] text-white/50">
+        <p className="text-xs font-semibold tracking-[0.25em] text-ink-muted">
           {greeting()}, {data.user.name.toUpperCase()}
         </p>
 
@@ -68,22 +69,22 @@ export default function DashboardPage() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="ob-glass mt-5 flex items-center justify-between gap-4 rounded-2xl px-5 py-4 transition-colors hover:bg-white/[0.12]"
+              className="ob-glass mt-5 flex items-center justify-between gap-4 rounded-2xl px-5 py-4 transition-colors hover:bg-veil/[0.12]"
             >
               <div>
-                <p className="text-sm font-semibold text-white">Design your schedule</p>
-                <p className="mt-0.5 text-sm text-white/60">
+                <p className="text-sm font-semibold text-ink">Design your schedule</p>
+                <p className="mt-0.5 text-sm text-ink-2">
                   Right now work spreads evenly. Tell us when you actually study to sharpen the plan.
                 </p>
               </div>
-              <span className="shrink-0 text-white/70">→</span>
+              <span className="shrink-0 text-ink-2">→</span>
             </motion.div>
           </Link>
         )}
 
         {!hero ? (
           <div className="mt-20 text-center">
-            <p className="text-lg text-white/70">No active missions.</p>
+            <p className="text-lg text-ink-2">No active missions.</p>
             <Link
               href="/missions/new"
               className="ob-btn mt-5 inline-block rounded-2xl px-8 py-3.5 text-base font-semibold"
@@ -95,8 +96,8 @@ export default function DashboardPage() {
           <>
             <HeroMission g={hero} />
             {rest.length > 0 && (
-              <div className="mt-12 space-y-3">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-white/45">
+              <div className="mt-10 space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted">
                   Other missions
                 </p>
                 {rest.map((g) => (
@@ -105,7 +106,7 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="mt-8 text-center">
-              <Link href="/missions/new" className="text-sm text-white/55 hover:text-white/90">
+              <Link href="/missions/new" className="text-sm text-ink-muted hover:text-ink">
                 + new mission
               </Link>
             </div>
@@ -128,12 +129,12 @@ function HeroMission({ g }: { g: DashboardGoal }) {
       className="mt-6"
     >
       <div className="flex items-baseline justify-between gap-4">
-        <Link href={`/missions/${g.goal.id}`} className="text-3xl font-bold tracking-tight text-white hover:text-white/80">
+        <Link href={`/missions/${g.goal.id}`} className="text-3xl font-bold tracking-tight text-ink hover:text-ink">
           {g.goal.title}
         </Link>
-        <span className="shrink-0 text-xs text-white/50">
+        <span className="shrink-0 text-xs text-ink-muted">
           {new Date(`${g.goal.deadline}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
-          · <span className="text-white/75 tnum">{g.days_remaining}d</span>
+          · <span className="text-ink tnum">{g.days_remaining}d</span>
         </span>
       </div>
 
@@ -141,15 +142,15 @@ function HeroMission({ g }: { g: DashboardGoal }) {
       <div className="mt-10 text-center">
         <div className="text-8xl font-bold tracking-tight tnum">
           {progress}
-          <span className="text-4xl text-white/60">%</span>
+          <span className="text-4xl text-ink-2">%</span>
         </div>
-        <p className="mt-1 text-sm text-white/50">done</p>
+        <p className="mt-1 text-sm text-ink-muted">done</p>
         <div className="mt-4 flex items-center justify-center">
           <DarkStatusBadge status={r.status} />
         </div>
-        <p className="mx-auto mt-3 max-w-sm text-sm text-white/70">{r.message}</p>
+        <p className="mx-auto mt-3 max-w-sm text-sm text-ink-2">{r.message}</p>
         {r.adjustments.length > 0 && (
-          <p className="mx-auto mt-2 max-w-sm text-sm text-amber-300">
+          <p className="mx-auto mt-2 max-w-sm text-sm text-warn">
             → {r.adjustments[0]}
             {r.adjustments.length > 1 && ` (+${r.adjustments.length - 1} more)`}
           </p>
@@ -162,18 +163,18 @@ function HeroMission({ g }: { g: DashboardGoal }) {
 
       {/* Today's move */}
       <div className="ob-glass mt-8 rounded-2xl p-6 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Today&apos;s move</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted">Today&apos;s move</p>
         {g.next_move ? (
           <>
-            <p className="mt-2 text-lg text-white">{g.next_move}</p>
+            <p className="mt-2 text-lg text-ink">{g.next_move}</p>
             {r.days_behind > 0 && (
-              <p className="mt-1 text-xs text-white/50">Because you are currently {r.days_behind} days behind.</p>
+              <p className="mt-1 text-xs text-ink-muted">Because you are currently {r.days_behind} days behind.</p>
             )}
           </>
         ) : g.today_total > 0 ? (
-          <p className="mt-2 text-lg text-emerald-300">✓ All {g.today_total} tasks done today.</p>
+          <p className="mt-2 text-lg text-good">✓ All {g.today_total} tasks done today.</p>
         ) : (
-          <p className="mt-2 text-sm text-white/60">Nothing scheduled today for this mission.</p>
+          <p className="mt-2 text-sm text-ink-2">Nothing scheduled today for this mission.</p>
         )}
         <Link
           href="/today"
@@ -190,11 +191,11 @@ function SmallMission({ g }: { g: DashboardGoal }) {
   return (
     <Link
       href={`/missions/${g.goal.id}`}
-      className="ob-glass flex items-center justify-between rounded-2xl px-5 py-4 transition-colors hover:bg-white/[0.12]"
+      className="ob-glass flex items-center justify-between rounded-2xl px-5 py-4 transition-colors hover:bg-veil/[0.12]"
     >
       <div>
-        <p className="text-sm font-semibold text-white">{g.goal.title}</p>
-        <p className="mt-0.5 text-[11px] text-white/50 tnum">
+        <p className="text-sm font-semibold text-ink">{g.goal.title}</p>
+        <p className="mt-0.5 text-[11px] text-ink-muted tnum">
           {g.days_remaining}d left · {g.progress_pct.toFixed(0)}% done
         </p>
       </div>

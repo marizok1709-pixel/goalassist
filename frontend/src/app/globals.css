@@ -1,36 +1,205 @@
 @import "tailwindcss";
 
-@theme {
-  /* GoalAssist — light editorial theme. Warm paper, blue primary, dark ink.
-     Status colors ship with icon + label, never color alone. */
-  --color-page: #fafaf8;
-  --color-surface: #ffffff;
-  --color-surface-2: #f3f3f0;
-  --color-ink: #191917;
-  --color-ink-2: #52514e;
-  --color-ink-muted: #8a887f;
-  --color-line: #e4e3dd;
-  --color-grid: #e9e8e2;
-  --color-baseline: #d6d5ce;
-  --color-accent: #2a78d6;
-  --color-accent-deep: #1c5cab;
-  --color-accent-wash: #eaf2fc;
-  --color-good: #0b8a0b;
-  --color-good-deep: #006300;
-  --color-warning: #a16207;
-  --color-warning-bright: #fab219;
-  --color-critical: #c93838;
+/* ---------------------------------------------------------------------------
+   GoalAssist design system.
+
+   Two themes, one token set. Every colour in the product resolves through the
+   semantic tokens below — components never name a raw hex or a Tailwind palette
+   colour, so re-theming is a change in this file only.
+
+   Light  = "Burnt sienna"   #E35336  #F5F5DC  #F4A460  #A0522D
+   Dark   = "Stormy morning" #6A89A7  #BDDDFC  #88BDF2  #384959
+
+   A four-colour palette cannot cover backgrounds, elevation, borders, four text
+   weights and three semantic states, so each palette supplies the identity
+   (surfaces + accents) and a neutral ramp is derived in the same hue family.
+   Sienna is the light primary; the saturated orange is reserved for errors and
+   the sandy tone for warnings, which keeps large surfaces calm.
+   --------------------------------------------------------------------------- */
+
+:root,
+html[data-theme="light"] {
+  color-scheme: light;
+
+  /* surfaces, lightest → deepest */
+  --bg: #fbfaf3;
+  --surface: #ffffff;
+  --surface-2: #f5f5dc; /* palette beige, used as a wash not a page fill */
+  --surface-3: #ece9d6;
+
+  /* text */
+  /* 3 tuned steps rather than alpha of one colour: alpha ramps built for
+     white-on-dark go unreadable on a light page. All three clear 4.5:1 on --bg. */
+  --ink: #241811;
+  --ink-2: #5c463c;
+  --ink-muted: #7a6357;
+
+  /* lines + the generic overlay colour (see --color-veil below) */
+  --line: #e6dfcf;
+  --line-strong: #d5cbb5;
+  --veil: #241811;
+
+  /* brand */
+  --accent: #a0522d;
+  --accent-hover: #8a4526;
+  --accent-contrast: #ffffff;
+  --accent-wash: #f7ece4;
+
+  /* semantics — deep enough to read as text on --bg */
+  --good: #2f6f4f;
+  --warn: #a8681a;
+  --bad: #c0392b;
+  --good-wash: #e8f1ea;
+  --warn-wash: #fbf0e0;
+  --bad-wash: #fbe9e6;
+
+  /* Categorical chart ramp, in fixed order — never cycled, never generated.
+     My first attempt (the brand palette extended by eye) failed validation:
+     two slots were 8.7 ΔE apart, indistinguishable even with normal colour
+     vision. These four pass all six checks against the #ffffff card surface —
+     lightness band, chroma floor, CVD separation (23.7 ΔE deutan), normal
+     vision (25.3), and 3:1 contrast. Sienna stays slot 1 for brand identity.
+     Re-run scripts/validate_palette.js before touching any of these. */
+  --chart-1: #a0522d;
+  --chart-2: #2563c9;
+  --chart-3: #15803d;
+  --chart-4: #7c3aed;
+  /* Sequential ramp for magnitude (one hue, light → dark). */
+  --seq-1: #f6e7dd;
+  --seq-2: #e4c1a8;
+  --seq-3: #cd9270;
+  --seq-4: #b06d44;
+  --seq-5: #a0522d;
+  --chart-grid: #e6dfcf;
+  --chart-axis: #7a6357;
+
+  --shadow-card: 0 1px 2px rgba(36, 24, 17, 0.04), 0 8px 24px rgba(36, 24, 17, 0.06);
+  --shadow-pop: 0 2px 6px rgba(36, 24, 17, 0.06), 0 16px 40px rgba(36, 24, 17, 0.1);
+
+  --aurora:
+    radial-gradient(58% 48% at 21% 44%, rgba(160, 82, 45, 0.1), transparent 70%),
+    radial-gradient(54% 54% at 79% 42%, rgba(244, 164, 96, 0.14), transparent 72%),
+    var(--bg);
+
+  /* Halftone burst — sienna core, sandy mid, orange fringe. Kept low-alpha:
+     on cream the same density that reads well on slate becomes shouty. */
+  --tex-core: color-mix(in oklab, #a0522d 30%, transparent);
+  --tex-mid: color-mix(in oklab, #f4a460 34%, transparent);
+  --tex-fringe: color-mix(in oklab, #e35336 20%, transparent);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* #384959 is the palette's darkest tone but reads light for a page base, so
+     it becomes the elevated surface and the base is a deeper sibling. Never
+     pure black — long-session comfort. */
+  --bg: #1b242f;
+  --surface: #26333f;
+  --surface-2: #384959;
+  --surface-3: #44576b;
+
+  --ink: #e9f2fb;
+  --ink-2: #bdddfc;
+  --ink-muted: #8ba3ba;
+
+  --line: #3d4f60;
+  --line-strong: #55697e;
+  --veil: #ffffff;
+
+  --accent: #88bdf2;
+  --accent-hover: #a5cef7;
+  --accent-contrast: #16202a;
+  --accent-wash: #2b3d4f;
+
+  --good: #6fc79b;
+  --warn: #e3b341;
+  --bad: #ef8a78;
+  --good-wash: #233a33;
+  --warn-wash: #3a3324;
+  --bad-wash: #3d2b29;
+
+  /* Dark is *selected*, not an automatic flip of light: its own steps, checked
+     against the #26333f card surface. Band is tighter here (L 0.48–0.67), which
+     is why these are mid-tones rather than the pastel accents used for text. */
+  --chart-1: #4f97e0;
+  --chart-2: #25a06f;
+  --chart-3: #9c6fe0;
+  --chart-4: #b5871f;
+  --seq-1: #24323f;
+  --seq-2: #2f5470;
+  --seq-3: #3a789f;
+  --seq-4: #479dcd;
+  --seq-5: #6fbdf0;
+  --chart-grid: #3d4f60;
+  --chart-axis: #8ba3ba;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.4);
+
+  --aurora:
+    radial-gradient(58% 48% at 21% 44%, rgba(106, 137, 167, 0.4), transparent 70%),
+    radial-gradient(54% 54% at 79% 42%, rgba(136, 189, 242, 0.16), transparent 72%),
+    var(--bg);
+
+  /* Same burst, palette-shifted: blue core, steel mid, ice fringe — standing in
+     for the reference's blue/magenta/cyan chromatic split. */
+  --tex-core: color-mix(in oklab, #88bdf2 62%, transparent);
+  --tex-mid: color-mix(in oklab, #6a89a7 66%, transparent);
+  --tex-fringe: color-mix(in oklab, #bdddfc 40%, transparent);
+}
+
+/* Expose the semantic tokens to Tailwind so `bg-surface`, `text-ink/70`,
+   `border-line` etc. exist as utilities. Opacity modifiers work because
+   Tailwind v4 wraps these in color-mix(). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  /* The one token that flips polarity: a translucent overlay that is light on
+     dark and dark on light. Replaces every hardcoded bg-white/10. */
+  --color-veil: var(--veil);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-wash: var(--accent-wash);
+
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-good-wash: var(--good-wash);
+  --color-warn-wash: var(--warn-wash);
+  --color-bad-wash: var(--bad-wash);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-seq-1: var(--seq-1);
+  --color-seq-2: var(--seq-2);
+  --color-seq-3: var(--seq-3);
+  --color-seq-4: var(--seq-4);
+  --color-seq-5: var(--seq-5);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
 
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Iowan Old Style", Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* The whole product now lives in the dark aurora theme; the light tokens above
-   stay for the future "light mode" toggle. */
 html {
-  background: #050506;
-  color: #fff;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 body {
@@ -43,79 +212,160 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Onboarding — dark aurora + glassmorphism. Deliberately separate from the
-   light editorial app theme above; scoped to .ob-* classes so it never leaks
-   into the rest of the product. Applied as a fixed full-screen overlay.
+   Shell + glass surfaces.
+
+   Light mode used to be `filter: invert(1) hue-rotate(180deg)` over the dark
+   theme, which is why it looked wrong — an inversion is not a design. Both
+   themes are now authored directly. Removing that filter also removes the last
+   composited-layer ancestor over form fields (see the Android IME bug).
    --------------------------------------------------------------------------- */
 .ob-root {
   position: fixed;
   inset: 0;
   z-index: 50;
   overflow-y: auto;
-  color: #fff;
+  color: var(--ink);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(58% 48% at 21% 44%, rgba(41, 84, 214, 0.55), transparent 70%),
-    radial-gradient(54% 54% at 79% 42%, rgba(255, 255, 255, 0.5), transparent 72%),
-    radial-gradient(42% 42% at 50% 50%, rgba(224, 214, 208, 0.16), transparent 70%),
-    #050506;
+  background: var(--aurora);
 }
 
+/* ---------------------------------------------------------------------------
+   Halftone burst background (from the Blueprint reference).
+
+   Rebuilt in CSS rather than shipped as a PNG so it re-colours from the theme
+   tokens instead of being hue-rotated, and so it costs nothing to download.
+
+   Three offset dot grids give the chromatic split; the topmost layer is a
+   radial gradient that starts transparent at the focal point and resolves to
+   the page colour, which erases the dots outward and produces the size/density
+   falloff of the reference. All of this lives in background-image on .ob-root —
+   deliberately NOT a wrapping element or a mask, so no composited layer is ever
+   created above the form fields (see the Android IME bug).
+   --------------------------------------------------------------------------- */
+/* Focal point of the burst. Defaults sit left of the content column; on a
+   desktop with a real mouse <CursorTexture> eases these toward the pointer. */
+:root {
+  --tex-x: 6%;
+  --tex-y: 48%;
+}
+
+.ob-root {
+  background:
+    /* Falloff. Starts transparent over the burst and resolves to the page
+       colour, which erases the dots outward — that is what produces the
+       reference's density taper. */
+    radial-gradient(46% 58% at var(--tex-x) var(--tex-y), transparent 0%, transparent 16%, var(--bg) 68%),
+    /* fringe */
+    radial-gradient(circle, var(--tex-fringe) 1.6px, transparent 1.7px) 25px 10px / 43px 43px,
+    /* mid */
+    radial-gradient(circle, var(--tex-mid) 2.2px, transparent 2.3px) 21px 21px / 43px 43px,
+    /* core */
+    radial-gradient(circle, var(--tex-core) 3.1px, transparent 3.2px) 0 0 / 43px 43px,
+    var(--aurora);
+  background-attachment: fixed, fixed, fixed, fixed, scroll, scroll;
+}
+
+/* The burst is decoration; on narrow screens there is no room to the side of
+   the content, so it would sit straight under the text. Drop it there. */
+@media (max-width: 900px) {
+  .ob-root {
+    background: var(--aurora);
+  }
+}
+
+/* Frosted panel. In dark it is a light film over slate; in light it is an
+   opaque warm card with a soft shadow — glass over a pale background reads as
+   muddy, so light mode gets real elevation instead. */
 .ob-glass {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+}
+html[data-theme="dark"] .ob-glass {
+  /* 7% disappeared against the textured background — cards need to hold their
+     own edge over the burst. */
+  background: color-mix(in oklab, var(--veil) 10%, transparent);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-color: color-mix(in oklab, var(--veil) 14%, transparent);
+  box-shadow: none;
 }
 .ob-glass::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ink-muted);
 }
 .ob-glass:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.13);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+html[data-theme="dark"] .ob-glass:focus {
+  background: color-mix(in oklab, var(--veil) 12%, transparent);
 }
 
+/* Primary action — glass, tinted with the accent.
+
+   Translucent + backdrop-blurred so the halftone burst and the surface behind
+   show through (that frosted quality is the product's signature). The accent
+   tint is what keeps it reading as *the* action rather than another panel, and
+   at 78% the fill still carries --accent-contrast text well past 4.5:1. */
 .ob-btn {
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  background: rgba(18, 18, 20, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  transition: background 0.15s ease;
+  background: color-mix(in oklab, var(--accent) 78%, transparent);
+  color: var(--accent-contrast);
+  border: 1px solid color-mix(in oklab, var(--veil) 22%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .ob-btn:hover:not(:disabled) {
-  background: rgba(44, 44, 48, 0.7);
+  background: color-mix(in oklab, var(--accent-hover) 90%, transparent);
+  border-color: color-mix(in oklab, var(--veil) 34%, transparent);
+  box-shadow: var(--shadow-card);
 }
 .ob-btn:disabled {
   opacity: 0.45;
 }
 
-/* Native date picker: keep glass look, invert the calendar icon to white. */
+/* Secondary / quiet action — the same glass, no accent tint. */
+.ob-btn-quiet {
+  background: color-mix(in oklab, var(--veil) 6%, transparent);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.ob-btn-quiet:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--veil) 12%, transparent);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.ob-btn-quiet:disabled {
+  opacity: 0.45;
+}
+
 .ob-date::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: pointer;
 }
-
-/* ---------------------------------------------------------------------------
-   Light mode — toggled from DarkNav ("light mode"), persisted in localStorage
-   as goalassist_theme, applied as data-theme on <html>. Implemented as a
-   faithful inversion of the whole dark system: near-black becomes white, white
-   text becomes black; hue-rotate keeps the status colors in their families.
-   --------------------------------------------------------------------------- */
-html[data-theme="light"] {
-  background: #fafaf9;
-}
-html[data-theme="light"] .ob-root {
-  filter: invert(1) hue-rotate(180deg);
+html[data-theme="dark"] .ob-date::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
-/* Step-to-step transitions are handled by motion/react (see onboarding page). */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* "Building your plan" progress fill — sweeps to ~92% while the API works. */
 .ob-building-fill {
   width: 10%;
-  background: linear-gradient(90deg, rgba(120, 150, 210, 0.7), rgba(170, 120, 160, 0.7));
+  background: linear-gradient(90deg, var(--accent), var(--chart-3));
   animation: ob-load 2.4s ease-out forwards;
 }
 @keyframes ob-load {
@@ -127,9 +377,33 @@ html[data-theme="light"] .ob-root {
   }
 }
 
+/* Skeleton shimmer for loading states. */
+.ob-skeleton {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--veil) 6%, transparent) 25%,
+    color-mix(in oklab, var(--veil) 12%, transparent) 37%,
+    color-mix(in oklab, var(--veil) 6%, transparent) 63%
+  );
+  background-size: 400% 100%;
+  animation: ob-shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.75rem;
+}
+@keyframes ob-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ob-building-fill {
     animation: none;
     width: 60%;
+  }
+  .ob-skeleton {
+    animation: none;
   }
 }
