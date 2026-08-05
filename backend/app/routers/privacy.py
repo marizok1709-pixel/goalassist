@@ -11,10 +11,11 @@ Collection rules enforced server-side (never trusted to the client):
   * IP addresses are never stored; only a coarse country code from the edge.
 """
 
+import os
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -296,3 +297,25 @@ def purge_expired_events(db: Session, now: datetime | None = None) -> int:
     result = db.execute(delete(AnalyticsEvent).where(AnalyticsEvent.created_at < cutoff))
     db.commit()
     return result.rowcount or 0
+
+
+@router.get("/internal/purge-expired-events")
+def run_retention_purge(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Enforce the retention policy on a schedule.
+
+    Called by a Vercel Cron once a day. Vercel attaches
+    `Authorization: Bearer <CRON_SECRET>` when the CRON_SECRET env var is set;
+    this endpoint refuses unless that matches. If CRON_SECRET is unset it refuses
+    outright, so the purge can never be an open, unauthenticated endpoint.
+
+    Idempotent and cheap: on any given day it deletes only the events that have
+    aged past the window (often zero).
+    """
+    secret = os.environ.get("CRON_SECRET")
+    if not secret or authorization != f"Bearer {secret}":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Forbidden")
+    removed = purge_expired_events(db)
+    return {"purged": removed, "retention_days": RETENTION_DAYS}
