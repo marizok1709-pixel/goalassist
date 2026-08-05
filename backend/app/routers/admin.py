@@ -21,7 +21,7 @@ import resource
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,7 @@ from ..models import (
     TransactionKind,
     User,
 )
+from ..schemas import AdminNoteUpdate, AdminUserGoal, AdminUserRow
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -350,6 +351,103 @@ def retention(weeks: int = Query(default=6, ge=1, le=26), db: Session = Depends(
         "cohorts": cohorts,
         "has_data": any(c["size"] for c in cohorts),
     }
+
+
+# ---------------------------------------------------------------------------
+# Users roster
+#
+# Individual PII (email, name, goals). Only reachable behind the is_admin gate,
+# and scoped to the beta with the testers' agreement. Activity is derived from
+# product work, not analytics, so it reflects every user regardless of consent.
+# ---------------------------------------------------------------------------
+
+@router.get("/users", response_model=list[AdminUserRow])
+def users(db: Session = Depends(get_db)):
+    all_users = db.scalars(select(User).order_by(User.created_at)).all()
+
+    goals = db.scalars(select(Goal).order_by(Goal.created_at)).all()
+    goals_by_user: dict[int, list[Goal]] = {}
+    for g in goals:
+        goals_by_user.setdefault(g.user_id, []).append(g)
+
+    # Task totals per user, in two grouped queries rather than a loop.
+    totals = dict(
+        db.execute(
+            select(Goal.user_id, func.count(ScheduledTask.id))
+            .join(ScheduledTask, ScheduledTask.goal_id == Goal.id)
+            .group_by(Goal.user_id)
+        ).all()
+    )
+    done = dict(
+        db.execute(
+            select(Goal.user_id, func.count(ScheduledTask.id))
+            .join(ScheduledTask, ScheduledTask.goal_id == Goal.id)
+            .where(ScheduledTask.completed.is_(True))
+            .group_by(Goal.user_id)
+        ).all()
+    )
+    # Most recent checked-off task = the "are they using it" signal. Uses the
+    # completed task's scheduled date, which lights up on any daily task, not
+    # only when a whole material finishes.
+    last_active = dict(
+        db.execute(
+            select(Goal.user_id, func.max(ScheduledTask.date))
+            .join(ScheduledTask, ScheduledTask.goal_id == Goal.id)
+            .where(ScheduledTask.completed.is_(True))
+            .group_by(Goal.user_id)
+        ).all()
+    )
+
+    return [
+        AdminUserRow(
+            id=u.id,
+            email=u.email,
+            name=u.name,
+            note=u.note,
+            is_admin=u.is_admin,
+            analytics_consent=u.analytics_consent,
+            created_at=u.created_at,
+            goals=[AdminUserGoal(title=g.title, deadline=g.deadline) for g in goals_by_user.get(u.id, [])],
+            tasks_total=int(totals.get(u.id, 0)),
+            tasks_completed=int(done.get(u.id, 0)),
+            last_active=last_active.get(u.id),
+        )
+        for u in all_users
+    ]
+
+
+@router.patch("/users/{user_id}", response_model=AdminUserRow)
+def set_user_note(user_id: int, payload: AdminNoteUpdate, db: Session = Depends(get_db)):
+    """Set the operator note on a user. The only field an admin may write here —
+    admins do not edit users' own profile data through this surface."""
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    user.note = (payload.note or None) and payload.note.strip() or None
+    db.commit()
+    db.refresh(user)
+
+    goals = db.scalars(select(Goal).where(Goal.user_id == user.id).order_by(Goal.created_at)).all()
+    total = db.scalar(
+        select(func.count(ScheduledTask.id)).join(Goal, Goal.id == ScheduledTask.goal_id).where(Goal.user_id == user.id)
+    ) or 0
+    completed = db.scalar(
+        select(func.count(ScheduledTask.id))
+        .join(Goal, Goal.id == ScheduledTask.goal_id)
+        .where(Goal.user_id == user.id, ScheduledTask.completed.is_(True))
+    ) or 0
+    last = db.scalar(
+        select(func.max(ScheduledTask.date))
+        .join(Goal, Goal.id == ScheduledTask.goal_id)
+        .where(Goal.user_id == user.id, ScheduledTask.completed.is_(True))
+    )
+    return AdminUserRow(
+        id=user.id, email=user.email, name=user.name, note=user.note,
+        is_admin=user.is_admin, analytics_consent=user.analytics_consent,
+        created_at=user.created_at,
+        goals=[AdminUserGoal(title=g.title, deadline=g.deadline) for g in goals],
+        tasks_total=int(total), tasks_completed=int(completed), last_active=last,
+    )
 
 
 # ---------------------------------------------------------------------------

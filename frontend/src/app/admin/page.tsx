@@ -17,6 +17,7 @@ import {
 import { DarkShell } from "@/components/darkchrome";
 import { EmptyState, PageLoading, SectionLabel, StatTile, TabButton } from "@/components/ui";
 import { BarList, ChartFrame, GroupedColumns, RetentionGrid, TimeSeries } from "@/components/charts";
+import { AdminUsers } from "./users-table";
 
 const RANGES = [7, 30, 90] as const;
 
@@ -166,6 +167,9 @@ export default function AdminPage() {
             rate is low.
           </p>
         </section>
+
+        {/* ---------------- Users roster ---------------- */}
+        <AdminUsers />
 
         {/* ---------------- Activity ---------------- */}
         <section className="mt-12 grid gap-4 lg:grid-cols-2">

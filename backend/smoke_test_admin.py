@@ -124,6 +124,52 @@ check("api latency recorded", i["api"]["requests_in_window"] > 0, i["api"])
 check("memory reported", i["process"]["memory_rss_mb"] > 0, i["process"])
 check("single-instance caveat is stated", "single warm instance" in i["caveat"], i["caveat"])
 
+# ---- users roster (individual PII, admin-only) ----
+ADMIN_ROUTES.append("/admin/users")  # keep the auth matrix honest for this one too
+check("/admin/users rejects anonymous", client.get("/admin/users").status_code in (401, 403))
+check("/admin/users hidden from normal user (404)", client.get("/admin/users", headers=NORMAL).status_code == 404)
+
+# Give the admin account a real mission so the roster has something to show.
+roster_deadline = (date.today() + timedelta(days=12)).isoformat()
+gid_for_admin = client.post(
+    "/goals", json={"title": "Roster goal", "deadline": roster_deadline}, headers=ADMIN
+).json()["id"]
+client.post(
+    f"/goals/{gid_for_admin}/materials",
+    json={"name": "Roster book", "total_quantity": 40, "unit": "pages", "already_completed": 0},
+    headers=ADMIN,
+)
+
+roster = client.get("/admin/users", headers=ADMIN).json()
+check("roster returns every user", len(roster) == 3, len(roster))
+me_row = next((r for r in roster if r["email"] == "admin@example.com"), None)
+check("roster row carries name + email", me_row and me_row["name"] == "U", me_row)
+check("roster exposes no password field", not any("password" in str(k).lower() for r in roster for k in r), list(roster[0].keys()))
+check("roster row has goal titles", any(g["title"] == "Roster goal" for g in me_row["goals"]), me_row["goals"])
+check("roster row has task totals", me_row["tasks_total"] >= 1, me_row)
+check("note starts empty", me_row["note"] is None, me_row["note"])
+check("activity is 0 before any work", me_row["tasks_completed"] == 0 and me_row["last_active"] is None, me_row)
+
+# activity signal: complete a task and confirm it registers
+sched = client.get(f"/goals/{gid_for_admin}/schedule", headers=ADMIN).json()
+if sched:
+    client.patch(f"/tasks/{sched[0]['id']}", json={"completed": True}, headers=ADMIN)
+roster = client.get("/admin/users", headers=ADMIN).json()
+me_row = next(r for r in roster if r["email"] == "admin@example.com")
+check("completing a task registers activity", me_row["tasks_completed"] >= 1, me_row)
+check("last_active is set after real work", me_row["last_active"] is not None, me_row)
+
+# editable note
+uid = me_row["id"]
+r = client.patch(f"/admin/users/{uid}", json={"note": "  the founder account  "}, headers=ADMIN)
+check("note update returns 200", r.status_code == 200, r.status_code)
+check("note is trimmed and stored", r.json()["note"] == "the founder account", r.json()["note"])
+check("note persists on re-read", next(x for x in client.get("/admin/users", headers=ADMIN).json() if x["id"] == uid)["note"] == "the founder account")
+check("note can be cleared", client.patch(f"/admin/users/{uid}", json={"note": ""}, headers=ADMIN).json()["note"] is None)
+check("over-long note rejected", client.patch(f"/admin/users/{uid}", json={"note": "x" * 600}, headers=ADMIN).status_code == 422)
+check("note edit hidden from normal user (404)", client.patch(f"/admin/users/{uid}", json={"note": "x"}, headers=NORMAL).status_code == 404)
+check("note on missing user 404s", client.patch("/admin/users/999999", json={"note": "x"}, headers=ADMIN).status_code == 404)
+
 # ---- finance: real queries over a real (empty) table ----
 fin = client.get("/admin/finance", headers=ADMIN).json()
 check("finance reports genuine zeros", fin["totals"]["revenue_cents"] == 0, fin["totals"])

@@ -24,6 +24,7 @@ ADDITIONS: dict[str, dict[str, str]] = {
         "is_admin": "BOOLEAN NOT NULL DEFAULT FALSE",
         "analytics_consent": "BOOLEAN NOT NULL DEFAULT FALSE",
         "consent_updated_at": "TIMESTAMP NULL",
+        "note": "VARCHAR(500) NULL",
     },
 }
 

@@ -41,6 +41,10 @@ class User(Base):
     analytics_consent: Mapped[bool] = mapped_column(Boolean, default=False)
     consent_updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
 
+    # Operator-only free-text note about this account (e.g. "my friend, found
+    # the mobile bug"). Admin-authored, never shown to the user. Nullable.
+    note: Mapped[str | None] = mapped_column(String(500), default=None)
+
     goals: Mapped[list["Goal"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     events: Mapped[list["AnalyticsEvent"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

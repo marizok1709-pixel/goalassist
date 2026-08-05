@@ -240,6 +240,21 @@ export interface AdminRetention {
   cohorts: { cohort: string; size: number; retained: number[]; retained_pct: number[] }[];
 }
 
+export interface AdminUserGoal { title: string; deadline: string }
+export interface AdminUserRow {
+  id: number;
+  email: string;
+  name: string;
+  note: string | null;
+  is_admin: boolean;
+  analytics_consent: boolean;
+  created_at: string;
+  goals: AdminUserGoal[];
+  tasks_total: number;
+  tasks_completed: number;
+  last_active: string | null;
+}
+
 export interface AdminInfrastructure {
   api: {
     window_seconds: number; requests_in_window: number; requests_per_minute: number;
@@ -370,6 +385,12 @@ export const api = {
   adminRetention: (weeks = 6) => request<AdminRetention>(`/admin/retention?weeks=${weeks}`),
   adminInfrastructure: () => request<AdminInfrastructure>("/admin/infrastructure"),
   adminFinance: (months = 12) => request<AdminFinance>(`/admin/finance?months=${months}`),
+  adminUsers: () => request<AdminUserRow[]>("/admin/users"),
+  setUserNote: (userId: number, note: string | null) =>
+    request<AdminUserRow>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ note }),
+    }),
 
   plan: (goalId: number) => request<Plan>(`/goals/${goalId}/plan`),
 

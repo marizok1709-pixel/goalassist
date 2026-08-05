@@ -301,3 +301,35 @@ class ConsentUpdate(BaseModel):
 class ConsentOut(BaseModel):
     analytics_consent: bool
     updated_at: datetime | None = None
+
+
+# ---------- Admin: per-user roster ----------
+
+class AdminUserGoal(BaseModel):
+    title: str
+    deadline: date
+
+
+class AdminUserRow(BaseModel):
+    """One row of the admin users table. Individual PII, admin-only, beta-scoped
+    with the testers' agreement — never exposed outside the is_admin gate."""
+
+    id: int
+    email: str
+    name: str
+    note: str | None
+    is_admin: bool
+    analytics_consent: bool
+    created_at: datetime
+    goals: list[AdminUserGoal]
+    tasks_total: int
+    tasks_completed: int
+    # Scheduled date of their most recently checked-off task — lights up the
+    # moment they engage with a daily task, not only at 100%. Product-derived,
+    # so it needs no analytics consent. It's the task's scheduled day, a proxy
+    # for recency, not a precise "last seen" timestamp.
+    last_active: date | None
+
+
+class AdminNoteUpdate(BaseModel):
+    note: str | None = Field(default=None, max_length=500)
