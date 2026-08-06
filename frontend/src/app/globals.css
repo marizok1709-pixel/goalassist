@@ -273,6 +273,92 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Mobile chrome.
+
+   The bottom tab bar is the primary navigation on a phone, so two things have
+   to be true: it must sit above the home indicator, and page content must be
+   able to scroll clear of it. Both are handled here rather than with utility
+   classes, because `env(safe-area-inset-*)` cannot be expressed in a Tailwind
+   arbitrary value without repeating the whole calc() at every call site.
+
+   `--ga-tabbar-h` is the bar's own height (icon + label + padding); content
+   padding is that height plus the inset plus normal page rhythm.
+   --------------------------------------------------------------------------- */
+:root {
+  --ga-tabbar-h: 3.75rem;
+}
+
+.ga-tabbar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 767px) {
+  .ga-main {
+    padding-bottom: calc(var(--ga-tabbar-h) + env(safe-area-inset-bottom, 0px) + 1.5rem);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The completion checkbox.
+
+   This is the single most important control in the product — the Reality
+   Engine has exactly one input, and it is this box. A native checkbox styled
+   only with `accent-color` gets its colour when *checked*; unchecked, on the
+   dark theme, it renders as a near-black square with no visible edge, so it
+   reads as a disabled placeholder rather than "tap me". Given the first beta
+   user ticked 0 of 26 tasks on a phone, an invisible affordance is not a
+   cosmetic problem.
+
+   Drawn explicitly instead: a clearly bordered empty box, and a filled accent
+   box with a checkmark once done.
+   --------------------------------------------------------------------------- */
+.ga-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border-radius: 0.5rem;
+  border: 2px solid color-mix(in oklab, var(--veil) 40%, transparent);
+  background: color-mix(in oklab, var(--veil) 7%, transparent);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.ga-check::before {
+  content: "";
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: scale(0);
+  transition: transform 0.12s ease-out;
+  background: var(--accent-contrast);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.ga-check:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+}
+.ga-check:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ga-check:checked::before {
+  transform: scale(1);
+}
+.ga-check:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ga-check,
+  .ga-check::before {
+    transition: none;
+  }
+}
+
 /* Frosted panel. In dark it is a light film over slate; in light it is an
    opaque warm card with a soft shadow — glass over a pale background reads as
    muddy, so light mode gets real elevation instead. */

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { CursorTexture } from "@/components/cursor-texture";
 import { ConsentGate } from "@/components/consent";
@@ -7,6 +7,26 @@ export const metadata: Metadata = {
   title: "GoalAssist — daily certainty for academic deadlines",
   description:
     "GoalAssist turns academic deadlines into daily certainty: never wonder what to do today, or whether you'll still make it.",
+};
+
+/**
+ * Configured for a phone, because that is what users are on.
+ *
+ * `viewportFit: "cover"` is what makes `env(safe-area-inset-*)` report real
+ * numbers on notched devices; without it the bottom tab bar sits under the home
+ * indicator. `themeColor` paints the browser's own chrome to match the app so
+ * the page doesn't end at a white system bar. Both values track the theme.
+ *
+ * Deliberately NOT set: `maximumScale` / `userScalable`. Blocking pinch-zoom is
+ * the one viewport option that actively harms users, and this product is read
+ * on small screens for long stretches.
+ */
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbfaf3" },
+    { media: "(prefers-color-scheme: dark)", color: "#1b242f" },
+  ],
 };
 
 /* Runs before first paint so the stored theme is on <html> by the time any

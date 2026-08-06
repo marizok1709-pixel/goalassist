@@ -128,6 +128,7 @@ export default function SettingsPage() {
                   id={`hours-${d.key}`}
                   className="ob-glass w-24 rounded-xl px-4 py-2 text-right text-sm text-ink tnum"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   max="16"
                   step="0.5"

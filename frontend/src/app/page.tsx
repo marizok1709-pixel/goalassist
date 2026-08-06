@@ -106,7 +106,7 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="mt-8 text-center">
-              <Link href="/missions/new" className="text-sm text-ink-muted hover:text-ink">
+              <Link href="/missions/new" className="inline-block px-3 py-2.5 text-sm text-ink-muted hover:text-ink">
                 + new mission
               </Link>
             </div>
@@ -128,8 +128,11 @@ function HeroMission({ g }: { g: DashboardGoal }) {
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className="mt-6"
     >
-      <div className="flex items-baseline justify-between gap-4">
-        <Link href={`/missions/${g.goal.id}`} className="text-3xl font-bold tracking-tight text-ink hover:text-ink">
+      <div className="flex items-baseline justify-between gap-3">
+        <Link
+          href={`/missions/${g.goal.id}`}
+          className="min-w-0 truncate text-2xl font-bold tracking-tight text-ink hover:text-ink sm:text-3xl"
+        >
           {g.goal.title}
         </Link>
         <span className="shrink-0 text-xs text-ink-muted">
@@ -139,10 +142,10 @@ function HeroMission({ g }: { g: DashboardGoal }) {
       </div>
 
       {/* THE number: how much is actually done. Trajectory lives in the badge. */}
-      <div className="mt-10 text-center">
-        <div className="text-8xl font-bold tracking-tight tnum">
+      <div className="mt-8 text-center sm:mt-10">
+        <div className="text-7xl font-bold tracking-tight tnum sm:text-8xl">
           {progress}
-          <span className="text-4xl text-ink-2">%</span>
+          <span className="text-3xl text-ink-2 sm:text-4xl">%</span>
         </div>
         <p className="mt-1 text-sm text-ink-muted">done</p>
         <div className="mt-4 flex items-center justify-center">
@@ -162,11 +165,11 @@ function HeroMission({ g }: { g: DashboardGoal }) {
       </div>
 
       {/* Today's move */}
-      <div className="ob-glass mt-8 rounded-2xl p-6 text-center">
+      <div className="ob-glass mt-8 rounded-2xl p-5 text-center sm:p-6">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted">Today&apos;s move</p>
         {g.next_move ? (
           <>
-            <p className="mt-2 text-lg text-ink">{g.next_move}</p>
+            <p className="mt-2 text-base text-ink sm:text-lg">{g.next_move}</p>
             {r.days_behind > 0 && (
               <p className="mt-1 text-xs text-ink-muted">Because you are currently {r.days_behind} days behind.</p>
             )}

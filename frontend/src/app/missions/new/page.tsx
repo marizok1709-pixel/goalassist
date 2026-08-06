@@ -90,11 +90,11 @@ export default function NewMissionPage() {
   if (launched) {
     return (
       <DarkShell>
-        <div className="pt-20 text-center">
+        <div className="pt-12 text-center sm:pt-20">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-ink-2">
             ✓ Mission created
           </p>
-          <h1 className="mt-5 text-5xl font-bold tracking-tight text-ink">{launched.title}</h1>
+          <h1 className="mt-5 text-3xl font-bold tracking-tight text-ink sm:text-5xl">{launched.title}</h1>
           <p className="mt-3 text-ink-2">
             Deadline{" "}
             {new Date(`${launched.deadline}T00:00:00`).toLocaleDateString("en-US", {
@@ -103,7 +103,7 @@ export default function NewMissionPage() {
             })}
           </p>
           <motion.p
-            className="mt-10 text-8xl font-bold text-ink tnum"
+            className="mt-8 text-7xl font-bold text-ink tnum sm:mt-10 sm:text-8xl"
             initial={{ opacity: 0, scale: 0.7 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
@@ -143,13 +143,13 @@ export default function NewMissionPage() {
   return (
     <DarkShell>
       <div className="pt-6">
-        <h1 className="text-3xl font-bold tracking-tight text-ink">New mission</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">New mission</h1>
         <p className="mt-1 text-sm text-ink-muted">
           A mission is a goal with a hard deadline and measurable material behind it.
         </p>
 
         <form onSubmit={submit} className="mt-8 space-y-5">
-          <section className="ob-glass space-y-4 rounded-3xl p-6">
+          <section className="ob-glass space-y-4 rounded-3xl p-4 sm:p-6">
             <Field label="Mission title" htmlFor="new-title">
               <TextField
                 id="new-title"
@@ -196,7 +196,7 @@ export default function NewMissionPage() {
             </p>
           </section>
 
-          <section className="ob-glass rounded-3xl p-6">
+          <section className="ob-glass rounded-3xl p-4 sm:p-6">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-muted">
               Materials
             </p>
@@ -204,10 +204,17 @@ export default function NewMissionPage() {
               The actual work: books, mock exams, vocabulary sets. The daily plan is computed
               automatically. If you&apos;re already partway through, put it in &quot;Done&quot;.
             </p>
+            {/* Five fixed columns need 282px before the name field gets a pixel
+                — on a 360px screen that left it ~14px wide. The name takes its
+                own row on a phone and the three small fields share the next one;
+                DOM order is untouched, so desktop is exactly as it was. */}
             <div className="mt-4 space-y-3">
               {materials.map((m, i) => (
-                <div key={m.id} className="grid grid-cols-[1fr_80px_90px_80px_32px] items-end gap-2">
-                  <label className="block">
+                <div
+                  key={m.id}
+                  className="grid grid-cols-[1fr_1fr_1fr_32px] items-end gap-2 sm:grid-cols-[1fr_80px_90px_80px_32px]"
+                >
+                  <label className="col-span-4 block sm:col-span-1">
                     {i === 0 && <span className="mb-1 block text-[11px] text-ink-muted">Name</span>}
                     <TextField
                       className={glassInput}
@@ -222,6 +229,7 @@ export default function NewMissionPage() {
                     <input
                       className={glassInput}
                       type="number"
+                      inputMode="decimal"
                       min="1"
                       placeholder="400"
                       aria-label={`Material ${i + 1} total`}
@@ -244,6 +252,7 @@ export default function NewMissionPage() {
                     <input
                       className={glassInput}
                       type="number"
+                      inputMode="decimal"
                       min="0"
                       placeholder="0"
                       aria-label={`Material ${i + 1} already done`}
@@ -265,7 +274,7 @@ export default function NewMissionPage() {
             <button
               type="button"
               onClick={() => setMaterials([...materials, newMaterial()])}
-              className="mt-4 text-sm text-ink-2 hover:text-ink"
+              className="mt-2 inline-block py-2.5 text-sm text-ink-2 hover:text-ink"
             >
               + Add material
             </button>

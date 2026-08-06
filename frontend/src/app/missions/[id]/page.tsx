@@ -153,14 +153,18 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
   return (
     <DarkShell width="max-w-3xl">
       <div className="pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
+        {/* Title and status stack on a phone — side by side, a long mission
+            title gets squeezed into a two-word-per-line column. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-muted">
               Mission{plan.goal.category ? ` · ${plan.goal.category}` : ""}
             </p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink">{plan.goal.title}</h1>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+              {plan.goal.title}
+            </h1>
           </div>
-          <div className="pt-1">
+          <div className="shrink-0 sm:pt-1">
             <DarkStatusBadge status={r.status} />
           </div>
         </div>
@@ -198,24 +202,30 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
           <ul className="mt-3 space-y-2">
             {plan.materials.map((m) => (
               <li key={m.material_id} className="ob-glass overflow-hidden rounded-2xl">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5">
-                  <span className="flex-1 text-[15px] text-ink">{m.name}</span>
-                  <span className="text-sm text-ink-2 tnum">
-                    {m.completed} / {m.total} {m.unit}
-                  </span>
-                  <span className="text-xs text-ink tnum">{m.human_rate}</span>
-                  <button
-                    onClick={() => toggleEdit(m.material_id, m.completed)}
-                    className={`text-xs ${editOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
-                  >
-                    update
-                  </button>
-                  <button
-                    onClick={() => toggleDefine(m)}
-                    className={`text-xs ${defineOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
-                  >
-                    edit
-                  </button>
+                {/* Phone: name on its own line, then the numbers, then the two
+                    actions as real tap targets. Desktop keeps the single row. */}
+                <div className="px-4 py-3 sm:flex sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-1 sm:px-5 sm:py-3.5">
+                  <span className="block text-[15px] text-ink sm:flex-1">{m.name}</span>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-3 sm:contents">
+                    <span className="text-sm text-ink-2 tnum">
+                      {m.completed} / {m.total} {m.unit}
+                    </span>
+                    <span className="text-xs text-ink tnum">{m.human_rate}</span>
+                  </div>
+                  <div className="-mb-1 mt-1 flex items-center gap-4 sm:contents">
+                    <button
+                      onClick={() => toggleEdit(m.material_id, m.completed)}
+                      className={`py-2 text-xs sm:py-0 ${editOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                    >
+                      update
+                    </button>
+                    <button
+                      onClick={() => toggleDefine(m)}
+                      className={`py-2 text-xs sm:py-0 ${defineOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                    >
+                      edit
+                    </button>
+                  </div>
                 </div>
 
                 {defineOpen === m.material_id && (
@@ -239,6 +249,7 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
                       <div className="flex flex-wrap items-center gap-2.5">
                         <input
                           type="number"
+                          inputMode="decimal"
                           min="1"
                           value={draft.total}
                           onChange={(e) => setDraft((d) => ({ ...d, total: e.target.value }))}
@@ -311,6 +322,7 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
                       <input
                         autoFocus
                         type="number"
+                        inputMode="decimal"
                         min="0"
                         max={m.total}
                         value={editValue}
@@ -371,6 +383,7 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
               <div className="flex flex-wrap items-center gap-2.5">
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="1"
                   value={addDraft.total}
                   onChange={(e) => setAddDraft((d) => ({ ...d, total: e.target.value }))}
@@ -385,6 +398,7 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
                 />
                 <input
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   value={addDraft.done}
                   onChange={(e) => setAddDraft((d) => ({ ...d, done: e.target.value }))}
@@ -406,7 +420,7 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
           ) : (
             <button
               onClick={() => setAddOpen(true)}
-              className="mt-3 text-sm text-ink-2 hover:text-ink"
+              className="mt-1 py-2.5 text-sm text-ink-2 hover:text-ink"
             >
               + add material
             </button>
@@ -484,13 +498,13 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
                 >
                   {busy ? "…" : "Delete forever"}
                 </button>
-                <button onClick={() => setConfirmDelete(false)} className="text-xs text-ink-muted hover:text-ink">
+                <button onClick={() => setConfirmDelete(false)} className="py-2.5 text-xs text-ink-muted hover:text-ink">
                   keep it
                 </button>
               </div>
             </div>
           ) : (
-            <button onClick={() => setConfirmDelete(true)} className="text-xs text-ink-muted hover:text-bad">
+            <button onClick={() => setConfirmDelete(true)} className="py-2.5 text-xs text-ink-muted hover:text-bad">
               Delete mission
             </button>
           )}

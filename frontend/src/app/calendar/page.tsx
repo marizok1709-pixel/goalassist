@@ -105,28 +105,32 @@ export default function CalendarPage() {
     <DarkShell width="max-w-4xl">
       <div className="pt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-ink tnum">{title}</h1>
-          <div className="flex gap-1.5">
+          <h1 className="text-xl font-bold tracking-tight text-ink tnum sm:text-2xl">{title}</h1>
+          {/* Controls sit on their own line on a phone and stay >=44px tall. */}
+          <div className="flex w-full gap-1.5 sm:w-auto">
             <button
               onClick={() => switchView(view === "week" ? "month" : "week")}
-              className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm"
+              className="ob-btn-quiet flex-1 rounded-xl px-3.5 py-2.5 text-sm sm:flex-none sm:py-1.5"
             >
               {view === "week" ? "month view" : "week view"}
             </button>
             <button
               onClick={() => shift(-1)}
               aria-label={view === "week" ? "Previous week" : "Previous month"}
-              className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm"
+              className="ob-btn-quiet rounded-xl px-4 py-2.5 text-sm sm:px-3.5 sm:py-1.5"
             >
               ←
             </button>
-            <button onClick={goToday} className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm">
+            <button
+              onClick={goToday}
+              className="ob-btn-quiet rounded-xl px-3.5 py-2.5 text-sm sm:py-1.5"
+            >
               Today
             </button>
             <button
               onClick={() => shift(1)}
               aria-label={view === "week" ? "Next week" : "Next month"}
-              className="ob-btn-quiet rounded-xl px-3.5 py-1.5 text-sm"
+              className="ob-btn-quiet rounded-xl px-4 py-2.5 text-sm sm:px-3.5 sm:py-1.5"
             >
               →
             </button>
@@ -167,19 +171,25 @@ export default function CalendarPage() {
           ) : (
             <ul className="mt-3 space-y-2">
               {selectedTasks.map((t) => (
-                <li key={t.id} className="ob-glass flex items-center gap-2.5 rounded-2xl px-4 py-3 text-sm">
+                <li key={t.id} className="ob-glass flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm">
                   <span
-                    className={
+                    className={`shrink-0 ${
                       t.completed ? "text-good" : t.date < todayIso ? "text-bad" : "text-ink-muted"
-                    }
+                    }`}
                     aria-hidden
                   >
                     {t.completed ? "✓" : t.date < todayIso ? "✕" : "○"}
                   </span>
-                  <span className={t.completed ? "text-ink-muted line-through" : "text-ink"}>
-                    {t.description}
+                  <span className="min-w-0 flex-1">
+                    <span className={t.completed ? "text-ink-muted line-through" : "text-ink"}>
+                      {t.description}
+                    </span>
+                    {/* The mission name wraps under the task on a phone rather
+                        than fighting it for the same line. */}
+                    <span className="mt-0.5 block text-[11px] text-ink-muted sm:mt-0 sm:inline sm:pl-2">
+                      {t.goal_title}
+                    </span>
                   </span>
-                  <span className="ml-auto shrink-0 text-[11px] text-ink-muted">{t.goal_title}</span>
                 </li>
               ))}
             </ul>
@@ -190,7 +200,51 @@ export default function CalendarPage() {
   );
 }
 
-/** The planning view: 7 full-height day columns, every task visible. */
+/**
+ * Load dots — the mobile stand-in for a day's task list.
+ *
+ * Seven columns of readable task titles cannot exist on a 360px screen (each
+ * column lands at ~46px and every title breaks one word per line, which is the
+ * defect the first beta user reported). The grid keeps its shape and drops to
+ * one dot per task, colour-coded by state; the day-detail panel below the grid
+ * is where the titles actually live, and always has been.
+ */
+function LoadDots({
+  tasks,
+  missed,
+  max = 4,
+}: {
+  tasks: CalendarTask[];
+  missed: boolean;
+  max?: number;
+}) {
+  if (tasks.length === 0) {
+    return <span className="text-[10px] text-ink-muted">rest</span>;
+  }
+  return (
+    <span className="flex flex-wrap items-center justify-center gap-[3px]">
+      {tasks.slice(0, max).map((t) => (
+        <span
+          key={t.id}
+          className={`h-1.5 w-1.5 rounded-full ${
+            t.completed ? "bg-good" : missed ? "bg-bad" : "bg-accent"
+          }`}
+        />
+      ))}
+      {tasks.length > max && (
+        <span className="text-[9px] leading-none text-ink-muted tnum">+{tasks.length - max}</span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The planning view.
+ *
+ * Desktop: 7 full-height columns with every task title visible.
+ * Mobile: the same 7 columns, compacted to date + load dots — tall enough to
+ * tap and short enough that the day-detail panel stays on screen.
+ */
 function WeekGrid({
   weekStart,
   byDate,
@@ -206,7 +260,7 @@ function WeekGrid({
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   return (
-    <div className="mt-5 grid grid-cols-7 gap-1.5">
+    <div className="mt-5 grid grid-cols-7 gap-1 sm:gap-1.5">
       {days.map((d) => {
         const date = iso(d);
         const dayTasks = byDate.get(date) ?? [];
@@ -218,14 +272,15 @@ function WeekGrid({
           <button
             key={date}
             onClick={() => onSelect(date)}
-            className={`flex min-h-64 flex-col rounded-xl border p-2 text-left transition-colors ${
+            aria-pressed={isSelected}
+            className={`flex min-h-16 flex-col items-center rounded-xl border p-1.5 transition-colors sm:min-h-64 sm:items-stretch sm:p-2 sm:text-left ${
               isSelected
                 ? "border-veil/40 bg-veil/[0.14]"
                 : "border-veil/10 bg-veil/[0.05] hover:bg-veil/[0.1]"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
+            <div className="flex flex-col items-center gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted sm:text-[11px] sm:tracking-wider">
                 {d.toLocaleDateString("en-US", { weekday: "short" })}
               </span>
               <span
@@ -236,7 +291,13 @@ function WeekGrid({
                 {d.getDate()}
               </span>
             </div>
-            <div className="mt-2 space-y-1">
+            {/* phone: dots */}
+            <span className="mt-1.5 sm:hidden">
+              <LoadDots tasks={dayTasks} missed={missed} />
+            </span>
+
+            {/* desktop: the real list */}
+            <div className="mt-2 hidden space-y-1 sm:block">
               {dayTasks.map((t) => (
                 <p
                   key={t.id}
@@ -254,7 +315,7 @@ function WeekGrid({
               {dayTasks.length === 0 && <p className="px-1.5 text-[11px] text-ink-muted">rest</p>}
             </div>
             {dayTasks.length > 0 && (
-              <p className="mt-auto pt-2 text-[10px] text-ink-muted tnum">
+              <p className="mt-auto hidden pt-2 text-[10px] text-ink-muted tnum sm:block">
                 {done}/{dayTasks.length} done
               </p>
             )}
@@ -288,17 +349,19 @@ function MonthGrid({
     ...Array.from({ length: daysInMonth }, (_, i) => iso(new Date(year, month, i + 1))),
   ];
   return (
-    <div className="mt-5 grid grid-cols-7 gap-1.5">
+    <div className="mt-5 grid grid-cols-7 gap-1 sm:gap-1.5">
       {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
         <div
           key={d}
-          className="px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-ink-muted"
+          className="py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-ink-muted sm:px-2 sm:text-[11px] sm:tracking-wider"
         >
-          {d}
+          {/* One letter is all that fits under 7 columns on a phone. */}
+          <span className="sm:hidden">{d.charAt(0)}</span>
+          <span className="hidden sm:inline">{d}</span>
         </div>
       ))}
       {cells.map((date, i) => {
-        if (date === null) return <div key={`b${i}`} className="min-h-20" />;
+        if (date === null) return <div key={`b${i}`} className="min-h-14 sm:min-h-20" />;
         const dayTasks = byDate.get(date) ?? [];
         const done = dayTasks.filter((t) => t.completed).length;
         const missed = date < todayIso && done < dayTasks.length;
@@ -308,20 +371,27 @@ function MonthGrid({
           <button
             key={date}
             onClick={() => onSelect(date)}
-            className={`min-h-20 rounded-xl border p-1.5 text-left align-top transition-colors ${
+            aria-pressed={isSelected}
+            className={`flex min-h-14 flex-col items-center rounded-xl border p-1 align-top transition-colors sm:min-h-20 sm:items-stretch sm:p-1.5 sm:text-left ${
               isSelected
                 ? "border-veil/40 bg-veil/[0.14]"
                 : "border-veil/10 bg-veil/[0.05] hover:bg-veil/[0.1]"
             }`}
           >
             <span
-              className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs tnum ${
+              className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs tnum ${
                 isToday ? "bg-accent font-semibold text-accent-contrast" : "text-ink-2"
               }`}
             >
               {Number(date.slice(8))}
             </span>
-            <div className="mt-1 space-y-0.5">
+
+            {/* phone: dots (no room for titles at ~44px per column) */}
+            <span className="mt-1 sm:hidden">
+              {dayTasks.length > 0 && <LoadDots tasks={dayTasks} missed={missed} max={3} />}
+            </span>
+
+            <div className="mt-1 hidden space-y-0.5 sm:block">
               {dayTasks.slice(0, 2).map((t) => (
                 <p
                   key={t.id}

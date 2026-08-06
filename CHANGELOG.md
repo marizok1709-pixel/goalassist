@@ -4,6 +4,59 @@ All notable changes to Goal Assist, newest first. Dates are yyyy-mm-dd.
 This is a pre-beta product; entries focus on user-visible behaviour and notable
 engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 
+## 2026-08-06 — mobile is the product
+
+The last open defect the first beta user reported. Owner decision this session:
+**phones are the baseline, desktop is the enhancement** — every screen is now
+designed and verified at 360×800 first. A native app stays deferred; the web
+layout has to be right before anything gets wrapped. The re-ranked plan behind
+this (and what got cut) is at the top of `PROJECT_STATE.md`.
+
+### Fixed
+
+- **The navigation ate the top of every page.** Ten links in one `flex-wrap`
+  row collapsed into four stacked lines at 360px. Phones now get a 56px top bar
+  (wordmark · theme · menu) plus a **bottom tab bar** carrying the core loop —
+  dashboard, today, calendar — because thumbs reach the bottom of a phone, not
+  the top. Everything secondary moved behind the menu. Desktop keeps the
+  original row; it was never the problem.
+- **The calendar was unreadable.** `grid-cols-7` was hardcoded with no
+  breakpoint, so each column was ~46px and every task title broke one word per
+  line. The grid keeps its shape on a phone and drops to **load dots** —
+  one dot per task, green done / red missed / accent pending — while the
+  day-detail panel below carries the titles, which is what it was always for.
+  Desktop still shows full columns.
+- **The completion checkbox was nearly invisible.** `accent-color` only paints
+  a checkbox when it is *checked*; unchecked, on the dark theme, it rendered as
+  a near-black square with no visible edge — it read as a disabled placeholder
+  rather than the control the whole product depends on. It is now drawn
+  explicitly: a bordered empty box, a filled accent box with a checkmark when
+  done, in a 48px label so a thumb can hit it. Worth noting the first beta user
+  ticked 0 of 26 tasks on a phone.
+- **Undersized tap targets** across `/today`, the dashboard, mission detail,
+  new-mission, login and onboarding — inline text links 16–20px tall are now
+  ≥32px. Every control on every route passes.
+- **`/missions/new` material rows** needed 282px of fixed columns before the
+  name field got a single pixel (~14px wide at 360). Name takes its own row on
+  a phone; the three small fields share the next one.
+- **Type scale** on onboarding, the dashboard hero and mission detail — 60px
+  headings on a 360px screen, now stepped per breakpoint.
+- Number inputs declare `inputMode`, so Android offers the right keypad.
+
+### Added
+
+- `viewport` export in the root layout: `viewportFit: "cover"` (so
+  `env(safe-area-inset-*)` reports real numbers and the tab bar clears the home
+  indicator) and per-theme `themeColor` (so the browser's own chrome matches the
+  app). Pinch-zoom is deliberately **not** disabled.
+
+Verified with headless Chrome at 360×800, touch emulation on: 9 routes with
+**zero horizontal overflow and zero undersized tap targets**, and an 11-check
+loop test that taps the tab bar, taps the checkbox, and confirms the task
+completes and the counter moves — in both themes. `tsc` clean, `next build`
+clean (17 routes, static rendering preserved), lint unchanged from baseline,
+backend suites 24/25/16 all passing.
+
 ## 2026-08-05 — security response headers
 
 A third-party header scan graded the deployed frontend **D** (only

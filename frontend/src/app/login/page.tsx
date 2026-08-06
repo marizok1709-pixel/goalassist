@@ -57,7 +57,7 @@ export default function LoginPage() {
         </form>
         <p className="mt-6 text-sm text-ink-muted">
           No account?{" "}
-          <Link href="/onboarding" className="text-ink underline hover:text-ink">
+          <Link href="/onboarding" className="inline-block py-2 text-ink underline hover:text-ink">
             Create your first mission
           </Link>
         </p>

@@ -1,6 +1,58 @@
 # GoalAssist — Project State (handoff)
 
-_Last updated: 2026-08-05. Read this first when resuming work._
+_Last updated: 2026-08-06. Read this first when resuming work._
+
+## 🎯 The plan (owner-set 2026-08-06, after the council review)
+
+The previous priority list (timezones → mobile → data collection → deploy
+hardening) was **all correctness and no product**. Shipping it perfectly still
+produces ~0% retention, because nothing in the product asks anyone to come back,
+and — more importantly — **there is nothing to retain anyone into yet**: the one
+real user completed 0 of 26 tasks. Retention machinery amplifies a working loop.
+We do not have evidence of a working loop.
+
+**Owner decision 2026-08-06: mobile is the product.** Users are overwhelmingly on
+phones (the only real user is, and the only reported open defect is the phone
+layout). Every screen is designed and verified at 360×800 first; desktop is the
+enhancement, not the baseline. A **native app is deliberately deferred** — the
+web layout must be right before anything is wrapped. Revisit after retention.
+
+### Ranked, with sizes
+
+| # | Item | Size | Why it is here |
+|---|---|---|---|
+| 1 | **Mobile layout pass** — nav, `/today`, `/calendar`, then the rest | ~1–2 days | The only reported open defect, on the only user's device. **It is also the confound**: until it is fixed, 0/26 cannot be read as unmotivated rather than untappable |
+| 2 | **Ask the one user why** | free | One message: "when you opened it and saw the list, what stopped you?" Worth more than the whole analytics stack at n=1 |
+| 3 | **Availability back in the flow** (or inferred) | ½ day | Onboarding *structurally cannot* produce availability today — the timing step was removed and `day_weight()` falls back to 1.0. The only real user's 26 tasks were spread evenly across 13 days with no rest day |
+| 4 | **"I fell behind — fix my plan"** (move deadline / drop material) | 2h–1 day | `PATCH /goals/{id}` already ships; the UI exposes only *delete*. Today the product's honesty terminates in a dead end whose only action is quitting |
+| 5 | **Daily email** | ½ day | Cheap, and it buys password reset for free. Expect amplification, **not** salvation — the one user returned the same day and still ticked nothing |
+| 6 | **Timezone as a stored IANA string** | ½ day | `Intl.DateTimeFormat().resolvedOptions().timeZone` at register, threaded into every `today` computation. This is not a temporal refactor |
+
+### Cut until retention exists
+
+Admin dashboard work · analytics / "proper data collection" (n=1 with consent
+off) · landing page · PWA · CI + frontend tests · rate limiting · email
+verification · time-weighted progress · non-linear effort curves · cross-mission
+load view · per-task time estimates · second-mission wizard polish · monitoring
+beyond ticking Neon's PITR box · **native app**.
+
+None of these are wrong. All of them are infrastructure for a scale that does
+not exist. Revisit each when a real user's behaviour demands it.
+
+### The metric changed
+
+Retired: _"10 students, 30 days, ≥50% weekly retention."_ It measures app-opens
+across ten friends — friendship, not product.
+
+Replaced with: **one person who is not Mark completes one mission end to end.**
+Then, and only then, recruit — and **screen for a real, externally dated exam
+inside 4–8 weeks**. A habit-shaped user ("read books every day") in a
+deadline-shaped product churns regardless of what gets built.
+
+### Standing rules this does not change
+
+Engine stays feature-frozen. No AI, no ads, no Google Calendar. Praise shows
+consequences. Every recommendation stays explainable.
 
 ## 📋 Session 2026-08-05 — redesign, analytics, GDPR, admin, hardening, deploy
 
@@ -26,9 +78,9 @@ Large session. All shipped to production and verified live. Full detail in
   Vasiliy's row intact.
 
 **Open follow-ups from this session:**
-1. **Retention purge is not scheduled.** `purge_expired_events()` exists +
-   tested; nothing calls it on a timer. Until a cron runs it, 180 days is policy
-   on paper. Most important open item.
+1. ~~Retention purge is not scheduled.~~ **Done** (commit `80dbab4`): a Vercel
+   Cron hits `GET /internal/purge-expired-events` daily at 03:00, guarded by
+   `CRON_SECRET` (the endpoint refuses outright if the var is unset).
 2. **Consent-sync gap.** Accepting the banner while logged out saves the local
    decision but never syncs to the account after login, so events get dropped
    until the user toggles it in settings. Minor UX, not a privacy hole.
@@ -46,61 +98,54 @@ materials. 26 tasks scheduled, **0 completed**. `availability` is NULL — they
 never reached `/timing`, so the engine is spreading work evenly with no rest
 days. They returned the same day ~13:22.
 
-Until priority 3 (data collection) exists, the only way to know any of this is
-to query Neon directly — that is worth remembering, and worth fixing.
+The only way to know any of this is to query Neon directly. That is deliberate
+for now — see the cut list; at n=1 a message to the user beats an events table.
 
 **They reported three things, on an Android phone:** book names saved
 word-reversed (fixed 08-04), no way to change materials after the mission was
-created (fixed 08-04), and the vertical mobile layout being a mess (**still
-open** — see priority 2b below).
+created (fixed 08-04), and the vertical mobile layout being a mess (**item 1 of
+the current plan**).
 
-## ⏭️ Next session (resume here) — owner-set priorities
+## 🗂️ Carried-over engineering detail
 
-1. **Timezones.** All dates are currently server-local; per-user timezone
-   handling is required before friends in different cities use it (a task that
-   flips at the server's midnight, not the user's, breaks the "today" promise).
-   Includes the known frontend inconsistency: `missions/[id]` marks TODAY via
-   UTC (`toISOString`) while `/calendar` uses local time.
-2. **Bug fix.** The first item is new and now outranks the rest — it is the one
-   reported defect still open, and the only user we have is on a phone.
-   - **(NEW) Mobile vertical layout.** `components/darkchrome.tsx:53` — the nav is
-     a 10-item `flex-wrap` row with `px-8 py-6`; at 360px it collapses into four
-     stacked lines that dominate the screen. `app/calendar/page.tsx:208,290` —
-     `grid grid-cols-7 gap-1.5` is hardcoded with no breakpoint and no
-     horizontal scroll, so each of the 7 columns is ~46px and task titles break
-     one word per line. Needs a real responsive pass (nav → compact/menu on
-     small screens; week view → scrollable columns or a stacked day list).
-   - Then the 2026-07-28 code-review list (details in the session
-   log below). Priority order inside that item: (a) calendar detail panel
-   claims "rest day" for selected days outside the fetched range; (b)
-   week↔month toggle snaps back to the last-clicked day's period; (c) no auth
-   guard on `/missions/new` → build one shared authed shell instead of per-page
-   copies; (d) light-mode dark flash on hard load + default 404 ignores theme
-   (pre-paint inline script + `not-found.tsx`); (e) redundant calendar
-   refetches / loading flash; (f) silent delete/save failures on mission
-   detail — **done 2026-08-04** for the material/mission writes on
-   `missions/[id]` (all of them now route through one `run()` helper that shows
-   an error line); other pages still swallow failures; (g) `next-env.d.ts`
-   dev/build churn.
-3. **Proper data collection.** Minimal funnel instrumentation for the beta:
-   who finished onboarding, day-2/day-7 return, last-seen page — DB queries or
-   a tiny events table; no analytics SaaS at 10 users.
-4. **Deploy.** ✅ First production deploy done 2026-08-03 (see session log
-   below): frontend + separate FastAPI backend on Vercel, Neon Postgres, env
-   secrets, HTTPS. **Still open before the beta:** error logging / monitoring,
-   an explicit backup policy (currently only Neon's default history), a health
-   alert, and deciding whether the DB stays on Neon or moves (Railway was the
-   originally-noted option). The deploy config fix is **not yet committed** (see
-   log).
+_The ranked plan is at the top of this file. What follows is the detail behind
+individual items, kept because it is specific and still true._
 
-Backlog (agreed 2026-07-28 vision discussion, after the four above): day-one
-task guarantee (fresh sparse mission can show "Nothing scheduled today" —
-front-load ≥1 task on creation day), daily email reminder (the retention
-lever), mobile-web responsiveness pass + PWA manifest (no native apps —
-web-first, retention target 50% weekly over 30 days with 10 users decides
-everything), Milestone 2 (explain schedule changes). Premium is deferred until
-retention is proven; sketch: free = 1 active mission, premium = unlimited,
-never paywall the trajectory math, student pricing ~€3–4/mo, no ads ever.
+**Mobile (item 1) — the two confirmed offenders.** `components/darkchrome.tsx`
+— the nav is a 10-item `flex-wrap` row with `px-8 py-6`; at 360px it collapses
+into four stacked lines that dominate the screen. `app/calendar/page.tsx` —
+`grid grid-cols-7 gap-1.5` is hardcoded with no breakpoint and no horizontal
+scroll, so each of the 7 columns is ~46px and task titles break one word per
+line.
+
+**Timezones (item 6) — scope.** `Intl.DateTimeFormat().resolvedOptions().timeZone`
+stored at register, threaded into every `today` computation. Includes the known
+frontend inconsistency: `missions/[id]` marks TODAY via UTC (`toISOString`)
+while `/calendar` uses local time. Not a refactor.
+
+**2026-07-28 code-review list, still open:** (a) calendar detail panel claims
+"rest day" for selected days outside the fetched range; (b) week↔month toggle
+snaps back to the last-clicked day's period; (c) no auth guard on
+`/missions/new` → build one shared authed shell instead of per-page copies;
+(d) default 404 ignores theme (`not-found.tsx`); (e) redundant calendar
+refetches / loading flash; (f) silent save failures — **done 2026-08-04** on
+`missions/[id]` (all writes route through one `run()` helper that shows an
+error line), other pages still swallow failures; (g) `next-env.d.ts` churn.
+
+**Day-one task guarantee.** A fresh sparse mission can show "Nothing scheduled
+today" — front-load ≥1 task on creation day. Cheap, and it is the first screen
+after the launch reveal.
+
+**Deploy.** ✅ Production since 2026-08-03. Still open: error logging, a health
+alert, and Neon PITR (tick the box — it is not a "policy"). Deferred, not
+forgotten.
+
+**Premium.** Deferred until retention is proven. Sketch unchanged: free = 1
+active mission, premium = unlimited, never paywall the trajectory math, student
+pricing ~€3–4/mo, no ads ever. Milestone 2 ("explain schedule changes") sits
+behind the same gate — note that the schedule *already* silently recomputes
+after every completion (`rebuild_schedule` from tomorrow); what is missing is
+telling the user it happened.
 
 ## 📋 Session log 2026-08-04 — first user-reported bugs
 

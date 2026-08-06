@@ -213,7 +213,7 @@ export default function OnboardingPage() {
           )}
         </AnimatePresence>
 
-        <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
+        <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-3xl flex-col items-center justify-center px-5 py-10 text-center sm:px-6 sm:py-16">
           <AnimatePresence mode="wait" custom={dir} initial={false}>
             <motion.div
               key={step}
@@ -237,11 +237,11 @@ export default function OnboardingPage() {
       case "welcome":
         return (
           <>
-            <h1 className="text-6xl font-bold tracking-tight sm:text-7xl">Goal Assist</h1>
-            <p className="mt-6 text-xl font-semibold text-ink">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-6xl md:text-7xl">Goal Assist</h1>
+            <p className="mt-6 text-lg font-semibold text-ink sm:text-xl">
               Turn long-term deadlines into daily certainty.
             </p>
-            <p className="mt-2 text-lg text-ink-2">
+            <p className="mt-2 text-base text-ink-2 sm:text-lg">
               Prepare for exams, applications, and goals
               <br className="hidden sm:block" /> without wondering what to do next.
             </p>
@@ -250,7 +250,7 @@ export default function OnboardingPage() {
             </button>
             <p className="mt-6 text-sm text-ink-muted">
               Already have an account?{" "}
-              <Link href="/login" className="text-ink underline hover:text-ink">
+              <Link href="/login" className="inline-block py-2 text-ink underline hover:text-ink">
                 Sign in
               </Link>
             </p>
@@ -261,23 +261,23 @@ export default function OnboardingPage() {
       case "register":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">Register</h1>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">Register</h1>
             <div className="mt-10 w-full max-w-md space-y-4">
               <TextField
-                className="ob-glass w-full rounded-2xl px-6 py-5 text-lg text-ink"
+                className="ob-glass w-full rounded-2xl px-5 py-4 text-base text-ink sm:px-6 sm:py-5 sm:text-lg"
                 placeholder="username"
                 value={account.username}
                 onValueChange={(v) => setAccount({ ...account, username: v })}
               />
               <input
-                className="ob-glass w-full rounded-2xl px-6 py-5 text-lg text-ink"
+                className="ob-glass w-full rounded-2xl px-5 py-4 text-base text-ink sm:px-6 sm:py-5 sm:text-lg"
                 type="email"
                 placeholder="email"
                 value={account.email}
                 onChange={(e) => setAccount({ ...account, email: e.target.value })}
               />
               <input
-                className="ob-glass w-full rounded-2xl px-6 py-5 text-lg text-ink"
+                className="ob-glass w-full rounded-2xl px-5 py-4 text-base text-ink sm:px-6 sm:py-5 sm:text-lg"
                 type="password"
                 placeholder="password (min 8 characters)"
                 value={account.password}
@@ -293,11 +293,11 @@ export default function OnboardingPage() {
       case "goal":
         return (
           <>
-            <p className="text-2xl font-semibold text-ink">Let&apos;s get started</p>
-            <h1 className="mt-1 text-5xl font-bold tracking-tight sm:text-6xl">What do you want to achieve?</h1>
+            <p className="text-xl font-semibold text-ink sm:text-2xl">Let&apos;s get started</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">What do you want to achieve?</h1>
             <TextField
               autoFocus
-              className="ob-glass mt-10 w-full max-w-xl rounded-full px-8 py-5 text-center text-lg text-ink"
+              className="ob-glass mt-10 w-full max-w-xl rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:py-5 sm:text-lg"
               placeholder="type your goal title here"
               value={title}
               onValueChange={setTitle}
@@ -314,12 +314,12 @@ export default function OnboardingPage() {
       case "deadline":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">When is the deadline for this goal?</h1>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">When is the deadline for this goal?</h1>
             <input
               autoFocus
               type="date"
               min={new Date().toISOString().slice(0, 10)}
-              className="ob-glass ob-date mt-10 w-full max-w-md rounded-full px-8 py-5 text-center text-lg text-ink"
+              className="ob-glass ob-date mt-10 w-full max-w-md rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:py-5 sm:text-lg"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
             />
@@ -341,28 +341,29 @@ export default function OnboardingPage() {
       case "materials":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">What materials will get you there?</h1>
-            <p className="mt-3 text-lg text-ink-2">The real work: books, mock exams, vocab sets.</p>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">What materials will get you there?</h1>
+            <p className="mt-3 text-base text-ink-2 sm:text-lg">The real work: books, mock exams, vocab sets.</p>
             <div className="mt-10 w-full max-w-xl space-y-6">
               {materials.map((m, i) => (
                 <div key={m.id} className="space-y-3">
                   <TextField
-                    className="ob-glass w-full rounded-full px-8 py-5 text-center text-lg text-ink"
+                    className="ob-glass w-full rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:py-5 sm:text-lg"
                     placeholder="book, PDF or exam collection"
                     value={m.name}
                     onValueChange={(v) => setMat(i, "name", v)}
                   />
                   <div className="flex gap-3">
                     <input
-                      className="ob-glass w-1/2 rounded-full px-6 py-4 text-center text-lg text-ink"
+                      className="ob-glass w-1/2 rounded-full px-3 py-4 text-center text-base text-ink sm:px-6 sm:text-lg"
                       type="number"
+                      inputMode="decimal"
                       min="1"
                       placeholder="how much"
                       value={m.amount}
                       onChange={(e) => setMat(i, "amount", e.target.value)}
                     />
                     <TextField
-                      className="ob-glass w-1/2 rounded-full px-6 py-4 text-center text-lg text-ink"
+                      className="ob-glass w-1/2 rounded-full px-3 py-4 text-center text-base text-ink sm:px-6 sm:text-lg"
                       placeholder="pages, papers, units…"
                       value={m.unit}
                       onValueChange={(v) => setMat(i, "unit", v)}
@@ -396,8 +397,8 @@ export default function OnboardingPage() {
       case "howfar":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">How far are you already?</h1>
-            <p className="mt-3 text-lg text-ink-2">Where you stand today. Leave 0 if you&apos;re just starting.</p>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">How far are you already?</h1>
+            <p className="mt-3 text-base text-ink-2 sm:text-lg">Where you stand today. Leave 0 if you&apos;re just starting.</p>
             <div className="mt-10 w-full max-w-xl space-y-5">
               {namedMaterials.map((m) => {
                 const idx = materials.indexOf(m);
@@ -407,8 +408,9 @@ export default function OnboardingPage() {
                       {m.name} — <span className="text-ink-muted">of {m.amount} {m.unit}</span>
                     </p>
                     <input
-                      className="ob-glass w-full rounded-full px-8 py-4 text-center text-lg text-ink"
+                      className="ob-glass w-full rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:text-lg"
                       type="number"
+                      inputMode="decimal"
                       min="0"
                       max={m.amount || undefined}
                       placeholder={`${m.unit} done so far`}
@@ -438,9 +440,9 @@ export default function OnboardingPage() {
         return (
           <>
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-ink-2">✓ Mission created</p>
-            <h1 className="mt-5 text-5xl font-bold tracking-tight sm:text-6xl">{launched.title}</h1>
+            <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">{launched.title}</h1>
             <motion.p
-              className="mt-10 text-8xl font-bold tnum"
+              className="mt-8 text-7xl font-bold tnum sm:mt-10 sm:text-8xl"
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}

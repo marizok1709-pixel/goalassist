@@ -139,15 +139,15 @@ export default function TodayPage() {
             <p className="mt-2 text-sm text-ink-muted">
               Rest day, or no missions yet. Staying ahead is always allowed.
             </p>
-            <div className="mt-6 flex items-center justify-center gap-4">
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
               <button
                 onClick={borrowTomorrow}
                 disabled={pullingMore}
-                className="ob-btn rounded-2xl px-6 py-3 text-sm font-semibold disabled:opacity-50"
+                className="ob-btn w-full rounded-2xl px-6 py-3 text-sm font-semibold disabled:opacity-50 sm:w-auto"
               >
                 {pullingMore ? "…" : "Borrow tomorrow's work"}
               </button>
-              <Link href="/missions/new" className="text-sm text-ink-2 hover:text-ink">
+              <Link href="/missions/new" className="py-2 text-sm text-ink-2 hover:text-ink">
                 + New mission
               </Link>
             </div>
@@ -155,9 +155,9 @@ export default function TodayPage() {
         )}
 
         {dayComplete && (
-          <div className="ob-glass mt-10 rounded-3xl p-7 text-center">
+          <div className="ob-glass mt-10 rounded-3xl p-5 text-center sm:p-7">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-good">✓ Day complete</p>
-            <p className="mx-auto mt-3 max-w-md text-2xl font-semibold text-ink">
+            <p className="mx-auto mt-3 max-w-md text-xl font-semibold text-ink sm:text-2xl">
               {praise ?? praiseFor(doneCount)}
             </p>
             <p className="mt-3 text-xs text-ink-muted tnum">
@@ -181,15 +181,17 @@ export default function TodayPage() {
             .filter((m) => m.tasks.length > 0)
             .map((m) => (
               <section key={m.goal_id}>
-                <div className="flex items-baseline justify-between">
+                <div className="flex items-baseline justify-between gap-3 px-1">
                   <Link
                     href={`/missions/${m.goal_id}`}
-                    className="text-xs font-semibold uppercase tracking-[0.15em] text-ink-muted hover:text-ink"
+                    className="-my-2 min-w-0 truncate py-2 text-xs font-semibold uppercase tracking-[0.15em] text-ink-muted hover:text-ink"
                   >
                     {m.title}
                   </Link>
                   {m.days_behind > 0 && (
-                    <span className="text-xs font-semibold text-warn">◆ {m.days_behind} days behind</span>
+                    <span className="shrink-0 text-xs font-semibold text-warn">
+                      ◆ {m.days_behind}d behind
+                    </span>
                   )}
                 </div>
                 <ul className="mt-2 space-y-2">
@@ -200,26 +202,39 @@ export default function TodayPage() {
                         t.completed ? "opacity-60" : "hover:bg-veil/[0.12]"
                       }`}
                     >
-                      <div className="flex items-center gap-3 px-4 py-3.5">
-                        <input
-                          type="checkbox"
-                          checked={t.completed}
-                          disabled={busy === t.id}
-                          onChange={(e) => finishTask(t, e.target.checked)}
-                          className="h-5 w-5 shrink-0 accent-accent"
-                        />
-                        <span className={`flex-1 text-[15px] ${t.completed ? "text-ink-muted line-through" : "text-ink"}`}>
+                      {/* Wraps on a phone (the two actions drop to their own
+                          full-width row), stays a single line from `sm` up. The
+                          checkbox sits in a padded label so the tap target is
+                          ~44px without the control itself being oversized. */}
+                      <div className="flex flex-wrap items-center gap-x-2 px-2 py-1 sm:flex-nowrap sm:gap-x-3 sm:px-4 sm:py-3.5">
+                        <label className="grid shrink-0 cursor-pointer place-items-center p-3 sm:-m-2">
+                          <input
+                            type="checkbox"
+                            checked={t.completed}
+                            disabled={busy === t.id}
+                            onChange={(e) => finishTask(t, e.target.checked)}
+                            className="ga-check"
+                          />
+                          <span className="sr-only">
+                            Mark &quot;{t.description}&quot; {t.completed ? "not done" : "done"}
+                          </span>
+                        </label>
+                        <span
+                          className={`min-w-0 flex-1 py-2 text-[15px] sm:py-0 ${
+                            t.completed ? "text-ink-muted line-through" : "text-ink"
+                          }`}
+                        >
                           {t.description}
                         </span>
                         {!t.completed && (
-                          <>
+                          <div className="flex w-full shrink-0 items-center gap-1 border-t border-veil/10 pl-1 sm:w-auto sm:gap-3 sm:border-0 sm:pl-0">
                             {t.why && (
                               <button
                                 onClick={() => {
                                   setWhyOpen(whyOpen === t.id ? null : t.id);
                                   setLogOpen(null);
                                 }}
-                                className={`shrink-0 text-xs ${whyOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                                className={`px-2 py-3 text-xs sm:p-0 ${whyOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
                               >
                                 Why?
                               </button>
@@ -227,11 +242,11 @@ export default function TodayPage() {
                             <button
                               onClick={() => toggleLog(t)}
                               title="Did more or less than planned? Log the real amount"
-                              className={`shrink-0 text-xs ${logOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                              className={`px-2 py-3 text-xs sm:p-0 ${logOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
                             >
                               did more/less
                             </button>
-                          </>
+                          </div>
                         )}
                       </div>
                       {whyOpen === t.id && t.why && (
@@ -244,10 +259,11 @@ export default function TodayPage() {
                           <p className="text-[13px] text-ink-2">
                             Planned: <span className="tnum">{t.quantity}</span>. How much did you actually do?
                           </p>
-                          <div className="mt-2.5 flex items-center gap-2.5">
+                          <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
                             <input
                               autoFocus
                               type="number"
+                              inputMode="decimal"
                               min="0"
                               value={logValue}
                               onChange={(e) => setLogValue(e.target.value)}
@@ -285,7 +301,7 @@ export default function TodayPage() {
             <span className="text-xs text-ink-muted tnum">
               {doneCount}/{allTasks.length} done
             </span>
-            <Link href="/calendar" className="text-xs text-ink-muted hover:text-ink">
+            <Link href="/calendar" className="-my-2 py-2 text-xs text-ink-muted hover:text-ink">
               View full calendar →
             </Link>
           </div>
