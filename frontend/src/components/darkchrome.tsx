@@ -138,7 +138,7 @@ export function DarkNav() {
     <>
       {/* ---------- mobile: compact top bar ---------- */}
       <div className="md:hidden">
-        <div className="flex h-14 items-center justify-between gap-2 px-4">
+        <div className="ga-topbar flex h-14 items-center justify-between gap-2 px-4">
           <Link
             href={authed ? "/" : "/onboarding"}
             className="-my-2 py-2 text-base font-bold tracking-tight text-ink"
@@ -215,8 +215,8 @@ export function DarkNav() {
         </AnimatePresence>
       </div>
 
-      {/* ---------- desktop: the original row, unchanged ---------- */}
-      <div className="hidden flex-wrap items-center justify-between gap-x-6 gap-y-3 px-8 py-6 text-sm font-medium text-ink-2 md:flex">
+      {/* ---------- desktop: the original row ---------- */}
+      <div className="ga-topbar hidden flex-wrap items-center justify-between gap-x-6 gap-y-3 px-8 py-5 text-sm font-medium text-ink-2 md:flex">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           {MARKETING.map((m) => (
             <Link key={m.href} href={m.href} className="transition-colors hover:text-ink">
@@ -271,12 +271,25 @@ function TabBar() {
     setAuthed(getToken() !== null);
   }, [pathname]);
 
+  /* Tell the rest of the app the bar is on screen. The consent banner is also
+     fixed to the bottom and at a higher z-index, so without this it sits on
+     top of the primary navigation — on a phone the tab bar *is* the nav, and
+     unlike page content it can never be scrolled clear. */
+  useEffect(() => {
+    const root = document.documentElement;
+    if (authed) root.dataset.tabbar = "";
+    else delete root.dataset.tabbar;
+    return () => {
+      delete root.dataset.tabbar;
+    };
+  }, [authed]);
+
   if (!authed) return null;
 
   return (
     <nav
       aria-label="Primary"
-      className="ga-tabbar fixed inset-x-0 bottom-0 z-20 border-t border-veil/10 bg-bg/85 backdrop-blur-lg md:hidden"
+      className="ga-tabbar fixed inset-x-0 bottom-0 z-20 md:hidden"
     >
       <ul className="flex">
         {PRIMARY.map((item) => {
@@ -365,6 +378,45 @@ export function DarkTrajectoryBar({ actualPct, expectedPct }: { actualPct: numbe
 }
 
 /** One weekday's study-hours stepper. Shared by onboarding-era timing + /timing. */
+/**
+ * A single weekday as a tap-to-toggle chip: on = a study day, off = a rest day.
+ *
+ * Onboarding asks only which days are rest days, not how many hours each day
+ * holds. The schedule engine consumes *relative* weights, so a binary answer
+ * already buys the thing that matters — days with no work on them. Hours are
+ * refined later at `/timing` with the fuller `DayColumn` grid below.
+ */
+export function DayChip({
+  label,
+  on,
+  onToggle,
+}: {
+  label: string;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={`${label}: ${on ? "study day" : "rest day"}`}
+      onClick={onToggle}
+      whileTap={{ scale: 0.94 }}
+      transition={{ type: "spring", stiffness: 400, damping: 26 }}
+      // Widths are explicit so the row breaks 4 + 3 (centred) on a phone
+      // rather than leaving a lone full-width chip on the second line, and
+      // fits all seven across from `sm` up. 56px tall keeps the tap target
+      // above the 44px floor.
+      className={`ob-glass flex h-14 w-[calc((100%-2.25rem)/4)] items-center justify-center rounded-2xl text-base font-semibold transition-colors sm:w-[calc((100%-4.5rem)/7)] ${
+        on ? "text-ink" : "text-ink-muted line-through opacity-50"
+      }`}
+    >
+      {label}
+    </motion.button>
+  );
+}
+
 export function DayColumn({
   label,
   hours,

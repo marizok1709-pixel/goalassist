@@ -212,16 +212,19 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
                     </span>
                     <span className="text-xs text-ink tnum">{m.human_rate}</span>
                   </div>
-                  <div className="-mb-1 mt-1 flex items-center gap-4 sm:contents">
+                  {/* `edit` is four characters wide — tall enough on its own but
+                      only ~22px across, which is not a thumb target. The
+                      horizontal padding is what makes it one. */}
+                  <div className="-mb-1 -ml-2 mt-1 flex items-center gap-2 sm:contents">
                     <button
                       onClick={() => toggleEdit(m.material_id, m.completed)}
-                      className={`py-2 text-xs sm:py-0 ${editOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                      className={`min-w-8 px-2 py-2 text-xs sm:min-w-0 sm:p-0 ${editOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
                     >
                       update
                     </button>
                     <button
                       onClick={() => toggleDefine(m)}
-                      className={`py-2 text-xs sm:py-0 ${defineOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                      className={`min-w-8 px-2 py-2 text-xs sm:min-w-0 sm:p-0 ${defineOpen === m.material_id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
                     >
                       edit
                     </button>

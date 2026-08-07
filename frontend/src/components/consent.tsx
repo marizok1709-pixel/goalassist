@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { analytics, getConsent, setConsent, type ConsentState } from "@/lib/analytics";
@@ -20,6 +20,7 @@ export function ConsentGate() {
   const pathname = usePathname();
   const [state, setState] = useState<ConsentState>("unset");
   const [ready, setReady] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // localStorage is client-only, so the banner can only be decided post-mount.
@@ -29,6 +30,33 @@ export function ConsentGate() {
     setReady(true);
     analytics.start();
   }, []);
+
+  /**
+   * Publish the banner's height so layouts can reserve it.
+   *
+   * It is fixed to the bottom of the viewport, and on a phone that is exactly
+   * where a page puts its primary button. At 360x800 it sat on top of the
+   * onboarding "Create account" CTA — the tap was landing on the banner, so
+   * the funnel's first step was unreachable until a decision was made. The
+   * height is measured rather than hardcoded because the copy wraps
+   * differently at every width.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = bannerRef.current;
+    if (!el) {
+      root.style.setProperty("--ga-consent-h", "0px");
+      return;
+    }
+    const publish = () => root.style.setProperty("--ga-consent-h", `${el.offsetHeight}px`);
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.setProperty("--ga-consent-h", "0px");
+    };
+  }, [ready, state]);
 
   // One page_view per navigation, and only ever after consent.
   useEffect(() => {
@@ -53,9 +81,10 @@ export function ConsentGate() {
 
   return (
     <div
+      ref={bannerRef}
       role="dialog"
       aria-label="Analytics consent"
-      className="fixed inset-x-0 bottom-0 z-[60] px-4 pb-4 sm:px-6 sm:pb-6"
+      className="ga-consent fixed inset-x-0 bottom-0 z-[60] px-4 pb-4 sm:px-6 sm:pb-6"
     >
       <div className="ob-glass mx-auto flex max-w-3xl flex-col gap-4 rounded-2xl p-5 sm:flex-row sm:items-center sm:gap-6">
         <div className="flex-1">
@@ -66,7 +95,7 @@ export function ConsentGate() {
           </p>
           <Link
             href="/policies"
-            className="mt-1.5 inline-block text-xs text-ink-muted underline hover:text-ink"
+            className="mt-0.5 inline-block py-2 text-xs text-ink-muted underline hover:text-ink"
           >
             What we collect
           </Link>
