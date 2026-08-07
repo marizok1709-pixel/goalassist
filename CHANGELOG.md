@@ -4,6 +4,119 @@ All notable changes to Goal Assist, newest first. Dates are yyyy-mm-dd.
 This is a pre-beta product; entries focus on user-visible behaviour and notable
 engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 
+## 2026-08-07 — "Bloom": rose glass replaces both themes
+
+Owner decision this session, and it **reverses** the 2026-07-28 decision that
+the dark slate system won: colour *is* the background now. A vivid rose→violet
+gradient field carries the page and frosted panels float over it holding all
+the text. "Burnt sienna" (light) and "Stormy morning" (dark) are retired.
+
+Because every component already reads semantic tokens and never a raw hex, this
+was a change to `globals.css` plus four small component touches — no page was
+rewritten.
+
+### Changed
+
+- **Light = "Bloom"**, rose→violet field on `#fff6f9`. **Dark = "Nocturne"**,
+  plum→indigo on `#120c17` — the same hue family rather than an unrelated
+  second design.
+- **Real glass in both themes.** Light mode previously faked it with an opaque
+  card, because a pale background gives a blur nothing to work with; the
+  saturated field is what makes glass possible, which is the whole argument for
+  the direction. Panels now carry `blur(28px) saturate(180%)`, a specular top
+  edge, and a shadow that separates them from the field.
+- **The primary button is the only opaque object on screen.** When every panel
+  is see-through, a see-through button is just another panel — so it is a solid
+  rose gradient, and that is the entire hierarchy.
+- **The halftone burst is gone.** Dot texture and a saturated gradient compete
+  for the same job. The cursor-tracking variables survive and now drift the
+  field's first bloom instead.
+- Top bar and bottom tab bar became glass; `themeColor` follows the new grounds.
+
+### Added
+
+- `scripts/validate_contrast.mjs` — every text token against **two** surfaces:
+  the glass composite and the bare field. 32 pairs, both themes.
+- `scripts/validate_palette.mjs` — the categorical chart ramps, including a
+  deuteranopia simulation. `globals.css` had told you to run
+  `scripts/validate_palette.js` for months; that file was never in the repo.
+
+### Notable
+
+- **The contrast maths drove the design, not the other way round.** Three
+  findings, all caught by the validators before anything shipped: `--ink-muted`
+  sat at **2.93:1** on the full-strength violet, so the violet's peak is capped
+  at 0.82 and the lower two text steps were darkened; the first chart ramp put
+  rose next to amber, which collapses to **6.9 ΔE** for a deuteranope — one
+  colour, not two; and the dark ramp had the same problem between violet and
+  green. Tightest margin now: 4.90:1 light, 4.75:1 dark.
+- Verified: `npm run verify` 70/70 in both themes (no tap-target, overflow or
+  reachability regressions), `tsc` clean, `next build` clean (17 routes), lint
+  at its 4-error baseline, both validators green.
+
+## 2026-08-07 — verification you can re-run
+
+The mobile pass shipped real guarantees proven by scripts that were then thrown
+away. This session turned them into something committed, plus a written gate
+for the work still on the plan. `VERIFICATION.md` at the repo root is the
+entry point.
+
+### Fixed
+
+- **The consent banner covered the onboarding button.** At 360×800 the point a
+  thumb aims at for "Create account →" belonged to the banner, not the button —
+  the first tap of the funnel was unreachable on a phone until the banner was
+  dismissed, and the onboarding screen centres itself in a fixed viewport so it
+  could not be scrolled clear. The banner now publishes its measured height as
+  `--ga-consent-h`, which the onboarding step and page content reserve.
+- **It also covered the entire bottom tab bar** on every signed-in route.
+  Page content can be scrolled out from under an overlay; fixed navigation
+  cannot. The tab bar marks itself with `data-tabbar` and the banner now stacks
+  above it.
+- **Two controls below the tap-target floor** the mobile pass claimed
+  everything cleared: "What we collect" in the banner (16px tall) and `edit` on
+  mission detail (22px wide, four characters with no horizontal padding).
+- **The dashboard nudged forever.** "Sharpen your schedule" was shown when
+  every day's hours were 0 or exactly the onboarding default — but `/timing`
+  steps in whole hours, so a student who deliberately sets 2h on each study day
+  was indistinguishable from one who never opened the page. It now reads a
+  stored `availability_refined` flag that `/timing` sets when it saves.
+
+### Added
+
+- **`frontend/verify/`** — two committed browser suites, `npm run verify`
+  (70 checks — 44 + 26 — and no new dependency; `puppeteer-core` was already
+  installed).
+  `mobile.mjs` sweeps every route in both themes at 360×800 for horizontal
+  overflow, tap-target size and reachability, plus the consent banner's own
+  state. `loop.mjs` walks the product the way a student does: onboard through
+  the rhythm step → the plan respects rest days → tick a task → the counter
+  moves → the calendar agrees → the schedule can still be corrected.
+- **`backend/smoke_test_availability.py`** — 27 checks locking the onboarding
+  rhythm step: rest days get no tasks, hours act as weights, availability is
+  saved before the goal exists, an all-zero week still produces a plan.
+- **`backend/funnel.py`** — read-only report of where every real account
+  stopped (`registered → mission → availability → first tick → mission
+  complete`). The plan's success metric in one command instead of hand-written
+  SQL against Neon. Masks the connection password; selects explicit columns so
+  it survives the deployed schema lagging the model.
+- **`VERIFICATION.md`** — the standing pre-commit gate, a gate written in
+  advance for plan items 4, 5 and 6, the post-deploy check, and the list of
+  gaps deliberately left ungated.
+
+### Notable
+
+- **The overflow check had been passing vacuously.** `.ob-root` sets
+  `overflow-y: auto`, and per spec that computes `overflow-x` to `auto` too, so
+  a 520px child scrolls *inside* the container and `documentElement.scrollWidth`
+  never grows. Any horizontal overflow introduced since the mobile pass would
+  have gone unreported. Found only because every new check was confirmed by
+  breaking the thing it guards and watching it fail — a habit now written into
+  `VERIFICATION.md`.
+- `availability_refined` is an additive column, applied by `app/migrate.py` on
+  the next cold start. Accounts that set a rhythm before it existed default to
+  false and will see the nudge once more; production had no such account.
+
 ## 2026-08-06 — mobile is the product
 
 The last open defect the first beta user reported. Owner decision this session:
