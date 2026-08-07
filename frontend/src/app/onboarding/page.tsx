@@ -5,14 +5,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { api, ApiError, setToken } from "@/lib/api";
-import { DarkNav } from "@/components/darkchrome";
+import { DarkNav, DayChip } from "@/components/darkchrome";
+import { TextField } from "@/components/textfield";
+import { DAYS, STUDY_DAY_HOURS } from "@/components/ui";
+import { analytics } from "@/lib/analytics";
 
 // The conversational step machine. Register creates the account (token) up
 // front; every later answer is held in local state until "building", which
-// fires createGoal → addMaterial(s). Weekly availability is NOT collected here
-// — students meet the dashboard/daily loop first, then set timing via the
-// "design your schedule" nudge (/timing). Until then the schedule spreads
-// work evenly (the engine defaults to even weighting when availability is null).
+// fires updateMe(availability) → createGoal → addMaterial(s).
+//
+// The "rhythm" step exists because the flow previously could not produce
+// availability at all: the timing question was moved out to /timing behind a
+// dashboard nudge, and the first real beta user never followed it. Their 26
+// tasks landed on 13 consecutive days with no rest day — a plan nobody keeps.
+// It asks only which days are rest days; hours stay refinable at /timing.
 type Step =
   | "welcome"
   | "register"
@@ -20,6 +26,7 @@ type Step =
   | "deadline"
   | "materials"
   | "howfar"
+  | "rhythm"
   | "building"
   | "launch";
 
@@ -30,13 +37,14 @@ const STEP_ORDER: Step[] = [
   "deadline",
   "materials",
   "howfar",
+  "rhythm",
   "building",
   "launch",
 ];
 
-// Progress-dot order: dots span the four content questions only;
+// Progress-dot order: dots span the five content questions only;
 // welcome / register / building / launch sit outside the counter.
-const COUNTED: Step[] = ["goal", "deadline", "materials", "howfar"];
+const COUNTED: Step[] = ["goal", "deadline", "materials", "howfar", "rhythm"];
 
 // Directional page transition: content lifts + de-blurs into place over a
 // persistent background, previous content lifts + blurs away first. Easing is
@@ -49,6 +57,12 @@ const stepVariants = {
     scale: 1,
     filter: "blur(0px)",
     transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] as const },
+    // Drop the filter entirely once the step has settled. `blur(0px)` is not
+    // `none`: it keeps the whole step in a composited layer, and Chromium on
+    // Android then hands Gboard a wrong cursor anchor for inputs inside it —
+    // committed words land at offset 0 and the field ends up word-reversed
+    // ("Klara and Sun" → "sun and Klara", as the first beta user hit).
+    transitionEnd: { filter: "none" },
   },
   exit: (dir: number) => ({
     opacity: 0,
@@ -60,18 +74,31 @@ const stepVariants = {
 };
 
 interface MaterialDraft {
+  id: number; // stable across re-renders so uncontrolled inputs keep their text
   name: string;
   amount: string; // total_quantity
   unit: string;
   done: string; // already_completed
 }
 
-const emptyMaterial: MaterialDraft = { name: "", amount: "", unit: "pages", done: "" };
+let draftSeq = 0;
+const newMaterial = (): MaterialDraft => ({
+  id: ++draftSeq,
+  name: "",
+  amount: "",
+  unit: "pages",
+  done: "",
+});
 
 interface Launched {
   title: string;
   days: number;
   remaining: { name: string; amount: number; unit: string }[];
+}
+
+/** Weekly availability in the shape the API stores: hours per weekday, 0 = rest. */
+function availabilityFrom(restDays: Set<string>): Record<string, number> {
+  return Object.fromEntries(DAYS.map((d) => [d.key, restDays.has(d.key) ? 0 : STUDY_DAY_HOURS]));
 }
 
 function daysFromToday(iso: string): number | null {
@@ -88,7 +115,9 @@ export default function OnboardingPage() {
   const [account, setAccount] = useState({ username: "", email: "", password: "" });
   const [title, setTitle] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [materials, setMaterials] = useState<MaterialDraft[]>([{ ...emptyMaterial }]);
+  const [materials, setMaterials] = useState<MaterialDraft[]>(() => [newMaterial()]);
+  // Rest days, by DAYS key. Everything is a study day until tapped off.
+  const [restDays, setRestDays] = useState<Set<string>>(() => new Set());
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -100,6 +129,7 @@ export default function OnboardingPage() {
     stepRef.current = step;
   }, [step]);
   function navigate(to: Step) {
+    analytics.track("onboarding_step", { step: to });
     setDir(STEP_ORDER.indexOf(to) >= STEP_ORDER.indexOf(stepRef.current) ? 1 : -1);
     setError("");
     setStep(to);
@@ -137,6 +167,12 @@ export default function OnboardingPage() {
     (async () => {
       setError("");
       try {
+        // Availability first, deliberately. The user has no goals yet, so
+        // PATCH /auth/me's reschedule loop is a no-op here — and the first
+        // schedule, built by addMaterial below, is then already weighted
+        // correctly instead of being built wrong and immediately rebuilt.
+        await api.updateMe({ availability: availabilityFrom(restDays) });
+        analytics.track("availability_saved", { from: "onboarding", rest_days: restDays.size });
         const goal = await api.createGoal({ title: title.trim(), deadline });
         const remaining: Launched["remaining"] = [];
         for (const m of namedMaterials) {
@@ -154,12 +190,18 @@ export default function OnboardingPage() {
         // Let the loading bar breathe before the reveal.
         await new Promise((r) => setTimeout(r, 900));
         if (cancelled) return;
+        analytics.track("mission_created", {
+          materials: namedMaterials.length,
+          days_to_deadline: Math.max(daysFromToday(deadline) ?? 0, 0),
+          from: "onboarding",
+        });
+        analytics.track("onboarding_complete");
         setLaunched({ title: title.trim(), days: Math.max(daysFromToday(deadline) ?? 0, 0), remaining });
         navigate("launch");
       } catch (err) {
         if (cancelled) return;
         // navigate() clears error, so set it *after* returning to the step.
-        navigate("howfar");
+        navigate("rhythm");
         setError(err instanceof ApiError ? err.message : "Cannot reach the server");
       }
     })();
@@ -170,6 +212,7 @@ export default function OnboardingPage() {
   }, [step]);
 
   const dLeft = daysFromToday(deadline);
+  const studyDays = DAYS.length - restDays.size;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -190,7 +233,7 @@ export default function OnboardingPage() {
           )}
         </AnimatePresence>
 
-        <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
+        <main className="mx-auto flex min-h-[calc(100vh-4.5rem)] max-w-3xl flex-col items-center justify-center px-5 py-10 text-center sm:px-6 sm:py-16">
           <AnimatePresence mode="wait" custom={dir} initial={false}>
             <motion.div
               key={step}
@@ -214,20 +257,20 @@ export default function OnboardingPage() {
       case "welcome":
         return (
           <>
-            <h1 className="text-6xl font-bold tracking-tight sm:text-7xl">Goal Assist</h1>
-            <p className="mt-6 text-xl font-semibold text-white/90">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-6xl md:text-7xl">Goal Assist</h1>
+            <p className="mt-6 text-lg font-semibold text-ink sm:text-xl">
               Turn long-term deadlines into daily certainty.
             </p>
-            <p className="mt-2 text-lg text-white/70">
+            <p className="mt-2 text-base text-ink-2 sm:text-lg">
               Prepare for exams, applications, and goals
               <br className="hidden sm:block" /> without wondering what to do next.
             </p>
-            <button className="ob-btn mt-12 rounded-2xl px-8 py-4 text-lg font-semibold" onClick={() => navigate("register")}>
+            <button className="ob-btn mt-10 rounded-2xl px-8 py-4 text-lg font-semibold" onClick={() => navigate("register")}>
               Create your first mission
             </button>
-            <p className="mt-6 text-sm text-white/50">
+            <p className="mt-6 text-sm text-ink-muted">
               Already have an account?{" "}
-              <Link href="/login" className="text-white/80 underline hover:text-white">
+              <Link href="/login" className="inline-block py-2 text-ink underline hover:text-ink">
                 Sign in
               </Link>
             </p>
@@ -238,23 +281,23 @@ export default function OnboardingPage() {
       case "register":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">Register</h1>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">Register</h1>
             <div className="mt-10 w-full max-w-md space-y-4">
-              <input
-                className="ob-glass w-full rounded-2xl px-6 py-5 text-lg text-white"
+              <TextField
+                className="ob-glass w-full rounded-2xl px-5 py-4 text-base text-ink sm:px-6 sm:py-5 sm:text-lg"
                 placeholder="username"
                 value={account.username}
-                onChange={(e) => setAccount({ ...account, username: e.target.value })}
+                onValueChange={(v) => setAccount({ ...account, username: v })}
               />
               <input
-                className="ob-glass w-full rounded-2xl px-6 py-5 text-lg text-white"
+                className="ob-glass w-full rounded-2xl px-5 py-4 text-base text-ink sm:px-6 sm:py-5 sm:text-lg"
                 type="email"
                 placeholder="email"
                 value={account.email}
                 onChange={(e) => setAccount({ ...account, email: e.target.value })}
               />
               <input
-                className="ob-glass w-full rounded-2xl px-6 py-5 text-lg text-white"
+                className="ob-glass w-full rounded-2xl px-5 py-4 text-base text-ink sm:px-6 sm:py-5 sm:text-lg"
                 type="password"
                 placeholder="password (min 8 characters)"
                 value={account.password}
@@ -270,14 +313,14 @@ export default function OnboardingPage() {
       case "goal":
         return (
           <>
-            <p className="text-2xl font-semibold text-white/80">Let&apos;s get started</p>
-            <h1 className="mt-1 text-5xl font-bold tracking-tight sm:text-6xl">What do you want to achieve?</h1>
-            <input
+            <p className="text-xl font-semibold text-ink sm:text-2xl">Let&apos;s get started</p>
+            <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">What do you want to achieve?</h1>
+            <TextField
               autoFocus
-              className="ob-glass mt-10 w-full max-w-xl rounded-full px-8 py-5 text-center text-lg text-white"
+              className="ob-glass mt-10 w-full max-w-xl rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:py-5 sm:text-lg"
               placeholder="type your goal title here"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onValueChange={setTitle}
               onKeyDown={(e) => e.key === "Enter" && title.trim() && navigate("deadline")}
             />
             <StepButtons
@@ -291,16 +334,16 @@ export default function OnboardingPage() {
       case "deadline":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">When is the deadline for this goal?</h1>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">When is the deadline for this goal?</h1>
             <input
               autoFocus
               type="date"
               min={new Date().toISOString().slice(0, 10)}
-              className="ob-glass ob-date mt-10 w-full max-w-md rounded-full px-8 py-5 text-center text-lg text-white"
+              className="ob-glass ob-date mt-10 w-full max-w-md rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:py-5 sm:text-lg"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
             />
-            <p className="mt-5 text-lg font-semibold text-white/80">
+            <p className="mt-5 text-lg font-semibold text-ink">
               {dLeft === null
                 ? " "
                 : dLeft < 0
@@ -318,36 +361,37 @@ export default function OnboardingPage() {
       case "materials":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">What materials will get you there?</h1>
-            <p className="mt-3 text-lg text-white/60">The real work: books, mock exams, vocab sets.</p>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">What materials will get you there?</h1>
+            <p className="mt-3 text-base text-ink-2 sm:text-lg">The real work: books, mock exams, vocab sets.</p>
             <div className="mt-10 w-full max-w-xl space-y-6">
               {materials.map((m, i) => (
-                <div key={i} className="space-y-3">
-                  <input
-                    className="ob-glass w-full rounded-full px-8 py-5 text-center text-lg text-white"
+                <div key={m.id} className="space-y-3">
+                  <TextField
+                    className="ob-glass w-full rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:py-5 sm:text-lg"
                     placeholder="book, PDF or exam collection"
                     value={m.name}
-                    onChange={(e) => setMat(i, "name", e.target.value)}
+                    onValueChange={(v) => setMat(i, "name", v)}
                   />
                   <div className="flex gap-3">
                     <input
-                      className="ob-glass w-1/2 rounded-full px-6 py-4 text-center text-lg text-white"
+                      className="ob-glass w-1/2 rounded-full px-3 py-4 text-center text-base text-ink sm:px-6 sm:text-lg"
                       type="number"
+                      inputMode="decimal"
                       min="1"
                       placeholder="how much"
                       value={m.amount}
                       onChange={(e) => setMat(i, "amount", e.target.value)}
                     />
-                    <input
-                      className="ob-glass w-1/2 rounded-full px-6 py-4 text-center text-lg text-white"
+                    <TextField
+                      className="ob-glass w-1/2 rounded-full px-3 py-4 text-center text-base text-ink sm:px-6 sm:text-lg"
                       placeholder="pages, papers, units…"
                       value={m.unit}
-                      onChange={(e) => setMat(i, "unit", e.target.value)}
+                      onValueChange={(v) => setMat(i, "unit", v)}
                     />
                   </div>
                   {materials.length > 1 && (
                     <button
-                      className="text-sm text-white/50 hover:text-white/80"
+                      className="text-sm text-ink-muted hover:text-ink"
                       onClick={() => setMaterials(materials.filter((_, j) => j !== i))}
                     >
                       remove
@@ -357,8 +401,8 @@ export default function OnboardingPage() {
               ))}
             </div>
             <button
-              className="mt-5 text-base text-white/60 hover:text-white/90"
-              onClick={() => setMaterials([...materials, { ...emptyMaterial }])}
+              className="mt-5 text-base text-ink-2 hover:text-ink"
+              onClick={() => setMaterials([...materials, newMaterial()])}
             >
               + add another material
             </button>
@@ -373,19 +417,20 @@ export default function OnboardingPage() {
       case "howfar":
         return (
           <>
-            <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">How far are you already?</h1>
-            <p className="mt-3 text-lg text-white/60">Where you stand today. Leave 0 if you&apos;re just starting.</p>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">How far are you already?</h1>
+            <p className="mt-3 text-base text-ink-2 sm:text-lg">Where you stand today. Leave 0 if you&apos;re just starting.</p>
             <div className="mt-10 w-full max-w-xl space-y-5">
               {namedMaterials.map((m) => {
                 const idx = materials.indexOf(m);
                 return (
-                  <div key={idx} className="text-left">
-                    <p className="mb-2 pl-2 text-base text-white/70">
-                      {m.name} — <span className="text-white/50">of {m.amount} {m.unit}</span>
+                  <div key={m.id} className="text-left">
+                    <p className="mb-2 pl-2 text-base text-ink-2">
+                      {m.name} — <span className="text-ink-muted">of {m.amount} {m.unit}</span>
                     </p>
                     <input
-                      className="ob-glass w-full rounded-full px-8 py-4 text-center text-lg text-white"
+                      className="ob-glass w-full rounded-full px-5 py-4 text-center text-base text-ink sm:px-8 sm:text-lg"
                       type="number"
+                      inputMode="decimal"
                       min="0"
                       max={m.amount || undefined}
                       placeholder={`${m.unit} done so far`}
@@ -397,14 +442,55 @@ export default function OnboardingPage() {
               })}
             </div>
             {error && <ErrorLine msg={error} />}
-            <StepButtons onBack={() => navigate("materials")} onNext={() => navigate("building")} label="Build my plan →" />
+            <StepButtons onBack={() => navigate("materials")} onNext={() => navigate("rhythm")} />
+          </>
+        );
+
+      case "rhythm":
+        return (
+          <>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+              Which days do you not study?
+            </h1>
+            <p className="mt-3 text-base text-ink-2 sm:text-lg">
+              Tap them off. Nothing gets scheduled on a rest day.
+            </p>
+            <div className="mt-10 flex w-full max-w-xl flex-wrap justify-center gap-3">
+              {DAYS.map((d) => (
+                <DayChip
+                  key={d.key}
+                  label={d.label}
+                  on={!restDays.has(d.key)}
+                  onToggle={() =>
+                    setRestDays((prev) => {
+                      const next = new Set(prev);
+                      if (!next.delete(d.key)) next.add(d.key);
+                      return next;
+                    })
+                  }
+                />
+              ))}
+            </div>
+            <p className="mt-5 text-base text-ink-2 tnum">
+              {studyDays === 0
+                ? "Pick at least one day to study"
+                : `${studyDays} study ${studyDays === 1 ? "day" : "days"} a week`}
+            </p>
+            <p className="mt-2 text-sm text-ink-muted">You can set real hours per day later.</p>
+            {error && <ErrorLine msg={error} />}
+            <StepButtons
+              onBack={() => navigate("howfar")}
+              onNext={() => studyDays > 0 && navigate("building")}
+              disabled={studyDays === 0}
+              label="Build my plan →"
+            />
           </>
         );
 
       case "building":
         return (
           <div className="ob-glass mx-auto flex w-full max-w-2xl items-center overflow-hidden rounded-full">
-            <div className="ob-building-fill rounded-full py-5 pl-8 text-left text-xl font-semibold text-white">
+            <div className="ob-building-fill rounded-full py-5 pl-8 text-left text-xl font-semibold text-ink">
               loading
             </div>
           </div>
@@ -414,23 +500,23 @@ export default function OnboardingPage() {
         if (!launched) return null;
         return (
           <>
-            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-white/70">✓ Mission created</p>
-            <h1 className="mt-5 text-5xl font-bold tracking-tight sm:text-6xl">{launched.title}</h1>
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-ink-2">✓ Mission created</p>
+            <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">{launched.title}</h1>
             <motion.p
-              className="mt-10 text-8xl font-bold tnum"
+              className="mt-8 text-7xl font-bold tnum sm:mt-10 sm:text-8xl"
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
             >
               {launched.days}
             </motion.p>
-            <p className="text-lg text-white/70">days to get there</p>
+            <p className="text-lg text-ink-2">days to get there</p>
             {launched.remaining.length > 0 && (
               <div className="ob-glass mx-auto mt-8 w-full max-w-sm rounded-2xl p-5 text-left">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/60">You&apos;ll need</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink-2">You&apos;ll need</p>
                 <ul className="mt-3 space-y-1.5">
                   {launched.remaining.map((r) => (
-                    <li key={r.name} className="flex justify-between text-white/85">
+                    <li key={r.name} className="flex justify-between text-ink">
                       <span className="truncate pr-3">{r.name}</span>
                       <span className="shrink-0 tnum">{r.amount} {r.unit}</span>
                     </li>
@@ -438,7 +524,7 @@ export default function OnboardingPage() {
                 </ul>
               </div>
             )}
-            <p className="mt-8 text-white/70">Your first day is prepared.</p>
+            <p className="mt-8 text-ink-2">Your first day is prepared.</p>
             <button
               className="ob-btn mt-5 rounded-2xl px-10 py-4 text-lg font-semibold"
               onClick={() => router.push("/today")}
@@ -466,7 +552,7 @@ function ProgressDots({ step }: { step: Step }) {
           key={s}
           animate={{ width: i === idx ? 24 : 6, opacity: i === idx ? 1 : 0.3 }}
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="h-1.5 rounded-full bg-white"
+          className="h-1.5 rounded-full bg-accent"
         />
       ))}
     </div>
@@ -474,7 +560,7 @@ function ProgressDots({ step }: { step: Step }) {
 }
 
 function ErrorLine({ msg }: { msg: string }) {
-  return <p className="mt-5 text-base text-red-300">✕ {msg}</p>;
+  return <p className="mt-5 text-base text-bad">✕ {msg}</p>;
 }
 
 function StepButtons({
@@ -491,8 +577,8 @@ function StepButtons({
   label?: string;
 }) {
   return (
-    <div className="mt-12 flex items-center gap-4">
-      <button className="text-base text-white/55 hover:text-white/85" onClick={onBack} disabled={busy}>
+    <div className="mt-10 flex items-center gap-4">
+      <button className="text-base text-ink-muted hover:text-ink" onClick={onBack} disabled={busy}>
         ← back
       </button>
       <button

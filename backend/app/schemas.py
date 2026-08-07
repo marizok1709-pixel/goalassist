@@ -1,8 +1,20 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from .models import GoalStatus
+
+# A material can't sensibly hold more than this, and bounding it keeps the
+# schedule engine's arithmetic away from float overflow (round(1e308·w) → inf →
+# OverflowError). `allow_inf_nan=False` on every quantity field additionally
+# rejects NaN/Infinity at validation, so neither can reach the engine or a
+# JSON error response. One constant so the cap lives in a single place.
+MAX_QUANTITY = 1_000_000.0
+
+# Furthest a deadline may sit in the future. The schedule rebuild loops once per
+# day between start and deadline, so an unbounded date (year 9999) turns each
+# material write into tens of seconds of CPU. ~30 years covers every real goal.
+MAX_DEADLINE_YEARS = 30
 
 
 # ---------- Auth / User ----------
@@ -31,6 +43,10 @@ class UserOut(BaseModel):
     degree: str | None
     year: int | None
     availability: dict[str, float] | None
+    availability_refined: bool = False
+    # Read-only: exposed so the UI can show the admin link, never writable.
+    # UserUpdate has no such field, so PATCH cannot set it.
+    is_admin: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -39,6 +55,10 @@ class UserUpdate(BaseModel):
     degree: str | None = None
     year: int | None = None
     availability: dict[str, float] | None = None
+    # Client-declared: /timing sets it when the student saves real hours,
+    # onboarding's coarse rest-day answer does not. Writable on purpose — the
+    # worst a caller can do with it is silence their own dashboard nudge.
+    availability_refined: bool | None = None
 
 
 class Token(BaseModel):
@@ -49,20 +69,32 @@ class Token(BaseModel):
 
 # ---------- Goal ----------
 
+def _bounded_deadline(value: date | None) -> date | None:
+    """Reject deadlines absurdly far out, so a schedule rebuild can't loop over
+    millions of days. Shared by create and update."""
+    if value is not None and value.year > date.today().year + MAX_DEADLINE_YEARS:
+        raise ValueError(f"deadline must be within {MAX_DEADLINE_YEARS} years")
+    return value
+
+
 class GoalCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
-    description: str | None = None
-    category: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    category: str | None = Field(default=None, max_length=80)
     deadline: date
     start_date: date | None = None
 
+    _check_deadline = field_validator("deadline")(_bounded_deadline)
+
 
 class GoalUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    category: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    category: str | None = Field(default=None, max_length=80)
     deadline: date | None = None
     status: GoalStatus | None = None
+
+    _check_deadline = field_validator("deadline")(_bounded_deadline)
 
 
 class GoalOut(BaseModel):
@@ -83,14 +115,27 @@ class GoalOut(BaseModel):
 class MaterialCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     type: str | None = None
-    total_quantity: float = Field(gt=0)
+    total_quantity: float = Field(gt=0, le=MAX_QUANTITY, allow_inf_nan=False)
     unit: str = Field(min_length=1, max_length=40)
     # Starting point: how much of this material is already done at creation.
-    already_completed: float = Field(default=0, ge=0)
+    already_completed: float = Field(default=0, ge=0, le=MAX_QUANTITY, allow_inf_nan=False)
 
 
 class MaterialProgressUpdate(BaseModel):
-    completed_quantity: float = Field(ge=0)
+    completed_quantity: float = Field(ge=0, le=MAX_QUANTITY, allow_inf_nan=False)
+
+
+class MaterialEdit(BaseModel):
+    """Correct a material's definition after the mission exists.
+
+    Every field is optional — send only what changed. Renaming keeps the
+    existing units (and therefore the completed history); changing the amount
+    or the unit re-slices the material, carrying the completed amount over.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    total_quantity: float | None = Field(default=None, gt=0, le=MAX_QUANTITY, allow_inf_nan=False)
+    unit: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class MaterialOut(BaseModel):
@@ -224,3 +269,72 @@ class DashboardGoal(BaseModel):
 class DashboardOut(BaseModel):
     user: UserOut
     goals: list[DashboardGoal]
+
+
+# ---------- Analytics + privacy ----------
+
+class EventIn(BaseModel):
+    """One event as sent by the browser. `name` is validated against a
+    server-side allow-list at ingest; `props` is stripped to small scalars."""
+
+    name: str = Field(min_length=1, max_length=64)
+    props: dict | None = None
+    path: str | None = Field(default=None, max_length=120)
+
+
+class EventBatch(BaseModel):
+    """Events are sent in batches to keep request volume (and battery) low.
+
+    Context that is identical for every event in the batch lives here rather
+    than being repeated per event — and is deliberately coarse: no user agent
+    string, no full URL, no IP (the server reads country from the edge header).
+    """
+
+    session_id: str = Field(min_length=8, max_length=64)
+    events: list[EventIn] = Field(default_factory=list, max_length=50)
+    device: str | None = Field(default=None, max_length=16)
+    browser: str | None = Field(default=None, max_length=24)
+    viewport_w: int | None = Field(default=None, ge=0, le=20000)
+    language: str | None = Field(default=None, max_length=12)
+    referrer: str | None = Field(default=None, max_length=500)
+
+
+class ConsentUpdate(BaseModel):
+    analytics_consent: bool
+
+
+class ConsentOut(BaseModel):
+    analytics_consent: bool
+    updated_at: datetime | None = None
+
+
+# ---------- Admin: per-user roster ----------
+
+class AdminUserGoal(BaseModel):
+    title: str
+    deadline: date
+
+
+class AdminUserRow(BaseModel):
+    """One row of the admin users table. Individual PII, admin-only, beta-scoped
+    with the testers' agreement — never exposed outside the is_admin gate."""
+
+    id: int
+    email: str
+    name: str
+    note: str | None
+    is_admin: bool
+    analytics_consent: bool
+    created_at: datetime
+    goals: list[AdminUserGoal]
+    tasks_total: int
+    tasks_completed: int
+    # Scheduled date of their most recently checked-off task — lights up the
+    # moment they engage with a daily task, not only at 100%. Product-derived,
+    # so it needs no analytics consent. It's the task's scheduled day, a proxy
+    # for recency, not a precise "last seen" timestamp.
+    last_active: date | None
+
+
+class AdminNoteUpdate(BaseModel):
+    note: str | None = Field(default=None, max_length=500)

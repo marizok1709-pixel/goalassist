@@ -1,36 +1,249 @@
 @import "tailwindcss";
 
-@theme {
-  /* GoalAssist — light editorial theme. Warm paper, blue primary, dark ink.
-     Status colors ship with icon + label, never color alone. */
-  --color-page: #fafaf8;
-  --color-surface: #ffffff;
-  --color-surface-2: #f3f3f0;
-  --color-ink: #191917;
-  --color-ink-2: #52514e;
-  --color-ink-muted: #8a887f;
-  --color-line: #e4e3dd;
-  --color-grid: #e9e8e2;
-  --color-baseline: #d6d5ce;
-  --color-accent: #2a78d6;
-  --color-accent-deep: #1c5cab;
-  --color-accent-wash: #eaf2fc;
-  --color-good: #0b8a0b;
-  --color-good-deep: #006300;
-  --color-warning: #a16207;
-  --color-warning-bright: #fab219;
-  --color-critical: #c93838;
+/* ---------------------------------------------------------------------------
+   GoalAssist design system — "Bloom".
+
+   Two themes, one token set. Every colour in the product resolves through the
+   semantic tokens below — components never name a raw hex or a Tailwind palette
+   colour, so re-theming is a change in this file only.
+
+   Light  = "Bloom"     rose → violet field, white glass
+   Dark   = "Nocturne"  plum → indigo field, light film glass
+
+   Owner decision 2026-08-07: colour *is* the background. A vivid rose/violet
+   gradient field carries the page and frosted panels float over it holding all
+   the text. This retires "Burnt sienna" (light) and "Stormy morning" (dark);
+   the old halftone burst is gone with them, because dot texture and a saturated
+   gradient fight each other for the same job.
+
+   The whole risk of this direction is contrast: translucent panels over a
+   saturated field. The glass alpha and the violet stop's 0.82 peak are not
+   taste values — they are the numbers that keep text legible, and the peak is
+   capped because at full strength --ink-muted sat at 2.93:1 on the bare field.
+
+   Two validators encode all of it. Run both before changing any field stop,
+   --glass-film, or any --ink/--accent/--good/--warn/--bad/--chart value:
+
+       node scripts/validate_contrast.mjs    text on glass AND on the field
+       node scripts/validate_palette.mjs     categorical chart ramps, incl. CVD
+
+   Tightest margins today: light 4.90:1, dark 4.75:1.
+   --------------------------------------------------------------------------- */
+
+:root,
+html[data-theme="light"] {
+  color-scheme: light;
+
+  /* surfaces, lightest → deepest */
+  --bg: #fff6f9;
+  --surface: #ffffff;
+  --surface-2: #ffeaf1;
+  --surface-3: #f7dcea;
+
+  /* Text has to survive two backgrounds, not one: the glass composite (cards,
+     fields) and the bare field (headings, eyebrows, nav sit straight on the
+     gradient). The bare field is the harder case and is what set these values —
+     at full-strength violet the original muted step landed at 2.93:1. */
+  --ink: #1e1622;
+  --ink-2: #3c2934;
+  --ink-muted: #4e3444;
+
+  /* lines + the generic overlay colour (see --color-veil below) */
+  --line: #f0d7e4;
+  --line-strong: #e0bcd0;
+  --veil: #2a1b24;
+
+  /* brand. --accent is load-bearing twice over: it is a fill *and* it is text
+     (the active tab, links). One token has to satisfy both, so it is the deep
+     rose rather than the vivid one — 5.32:1 as text on glass, 7.16:1 under
+     white as a fill. The vivid pair below is decorative only and never carries
+     text; that separation is what makes the palette safe. */
+  --accent: #ab0f55;
+  --accent-hover: #8e0b52;
+  --accent-contrast: #ffffff;
+  --accent-wash: #ffe6f0;
+  --accent-vivid: #ff8fb1;
+  --accent-vivid-2: #c77dff;
+
+  /* semantics — deep enough to read as text on the glass composite */
+  --good: #1b6344;
+  --warn: #7d4708;
+  --bad: #a81f19;
+  --good-wash: #e3f5ec;
+  --warn-wash: #fdf0dc;
+  --bad-wash: #ffe8e5;
+
+  /* Categorical chart ramp, in fixed order — never cycled, never generated.
+     Rose keeps slot 1 for brand identity; the rest are blue, teal and violet.
+     A ramp built only from tints of the brand rose fails immediately, and so
+     did rose + amber: for a deuteranope those two collapse to 6.9 ΔE, i.e. one
+     colour. These four clear every gate against #ffffff.
+     Re-run `node scripts/validate_palette.mjs` before touching any of them. */
+  --chart-1: #c2185b;
+  --chart-2: #0072b2;
+  --chart-3: #0f7b6c;
+  --chart-4: #6d3ac7;
+  /* Sequential ramp for magnitude (one hue, light → dark). */
+  --seq-1: #ffe6f0;
+  --seq-2: #ffc2d9;
+  --seq-3: #f591bb;
+  --seq-4: #d4508c;
+  --seq-5: #ab0f55;
+  --chart-grid: #f0d7e4;
+  --chart-axis: #644a58;
+
+  --shadow-card: 0 1px 2px rgba(74, 20, 56, 0.06), 0 8px 28px rgba(74, 20, 56, 0.1);
+  --shadow-pop: 0 2px 8px rgba(74, 20, 56, 0.1), 0 20px 48px rgba(74, 20, 56, 0.16);
+
+  /* The field. Three blooms over a near-white ground; the first tracks the
+     pointer on desktop (--tex-x/--tex-y, written by <CursorTexture>), which is
+     what stops a static gradient from feeling like wallpaper. */
+  /* The blooms overlap the content column on purpose. Pushed to the corners
+     they leave a near-white middle, and glass over white is just a white card —
+     the frosted quality only exists where there is colour to refract. No stop
+     is darker than #c77dff, which is the swatch the contrast maths uses as its
+     worst case; spreading them changes coverage, not that floor. */
+  --aurora:
+    radial-gradient(58% 52% at var(--tex-x) var(--tex-y), #ff8fb1 0%, rgba(255, 143, 177, 0.72) 42%, rgba(255, 143, 177, 0.22) 68%, transparent 88%),
+    radial-gradient(62% 58% at 78% 26%, rgba(199, 125, 255, 0.82) 0%, rgba(199, 125, 255, 0.6) 44%, rgba(199, 125, 255, 0.2) 70%, transparent 90%),
+    radial-gradient(64% 52% at 34% 96%, #ffb3cd 0%, rgba(255, 179, 205, 0.6) 46%, transparent 84%),
+    radial-gradient(50% 44% at 62% 62%, rgba(199, 125, 255, 0.4) 0%, transparent 78%),
+    var(--bg);
+
+  /* Liquid Glass. --glass-film is the alpha the contrast maths depends on. */
+  --glass-film: rgba(255, 255, 255, 0.68);
+  --glass-film-hi: rgba(255, 255, 255, 0.8);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --glass-specular: rgba(255, 255, 255, 0.95);
+  --glass-blur: 28px;
+  --glass-shadow: 0 1px 1px rgba(74, 20, 56, 0.04), 0 10px 34px rgba(74, 20, 56, 0.12);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Deep plum rather than neutral slate, so the dark theme is the same hue
+     family as the light one instead of an unrelated second design. Never pure
+     black — long-session comfort, and OLED smear on a pure #000 ground. */
+  --bg: #120c17;
+  --surface: #241a2c;
+  --surface-2: #33243d;
+  --surface-3: #43304f;
+
+  /* Checked against the worst-case glass composite #633250. */
+  --ink: #fcf1f7;
+  --ink-2: #efcfe0;
+  --ink-muted: #cda9bc;
+
+  --line: #43304f;
+  --line-strong: #5c4269;
+  --veil: #ffffff;
+
+  /* Inverted role from light: here the accent is the *light* rose, because on
+     a plum ground the deep rose disappears. Fills carry near-black text. */
+  --accent: #ffa6c8;
+  --accent-hover: #ffc2da;
+  --accent-contrast: #2a0e1c;
+  --accent-wash: #3d1f33;
+  --accent-vivid: #ff8fb1;
+  --accent-vivid-2: #c77dff;
+
+  --good: #7fdcaf;
+  --warn: #f5c96b;
+  --bad: #ffa697;
+  --good-wash: #17332a;
+  --warn-wash: #382e18;
+  --bad-wash: #3a2220;
+
+  /* Dark is *selected*, not an automatic flip of light: the same four hue
+     families, lifted into the L 67–76 band and checked against the #241a2c
+     card. Lightness is the only channel colour-blind viewers keep here, so the
+     four are spread across it deliberately rather than being tints of one
+     brightness. Worst pair: 19.6 ΔE under deuteranopia. */
+  --chart-1: #ff8fb1;
+  --chart-2: #5aa9e6;
+  --chart-3: #5fd0a8;
+  --chart-4: #cfa8ff;
+  --seq-1: #2b1a33;
+  --seq-2: #4b2547;
+  --seq-3: #77335e;
+  --seq-4: #ad4a7c;
+  --seq-5: #ff8fb1;
+  --chart-grid: #43304f;
+  --chart-axis: #cda9bc;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.34), 0 8px 28px rgba(0, 0, 0, 0.36);
+  --shadow-pop: 0 2px 8px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.48);
+
+  /* Same three blooms, deepened until the glass film over the *brightest* stop
+     still carries --ink-muted past 4.5:1. That constraint is why these are
+     plum and indigo rather than the light theme's rose and violet. */
+  --aurora:
+    radial-gradient(58% 52% at var(--tex-x) var(--tex-y), #42123a 0%, rgba(66, 18, 58, 0.78) 42%, rgba(66, 18, 58, 0.26) 68%, transparent 88%),
+    radial-gradient(62% 58% at 78% 26%, #221340 0%, rgba(34, 19, 64, 0.72) 44%, rgba(34, 19, 64, 0.24) 70%, transparent 90%),
+    radial-gradient(64% 52% at 34% 96%, #4e1638 0%, rgba(78, 22, 56, 0.62) 46%, transparent 84%),
+    radial-gradient(50% 44% at 62% 62%, rgba(66, 18, 58, 0.45) 0%, transparent 78%),
+    var(--bg);
+
+  --glass-film: rgba(255, 255, 255, 0.12);
+  --glass-film-hi: rgba(255, 255, 255, 0.17);
+  --glass-edge: rgba(255, 255, 255, 0.16);
+  --glass-specular: rgba(255, 255, 255, 0.34);
+  --glass-blur: 28px;
+  --glass-shadow: 0 1px 1px rgba(0, 0, 0, 0.2), 0 10px 34px rgba(0, 0, 0, 0.4);
+}
+
+/* Expose the semantic tokens to Tailwind so `bg-surface`, `text-ink/70`,
+   `border-line` etc. exist as utilities. Opacity modifiers work because
+   Tailwind v4 wraps these in color-mix(). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  /* The one token that flips polarity: a translucent overlay that is light on
+     dark and dark on light. Replaces every hardcoded bg-white/10. */
+  --color-veil: var(--veil);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-wash: var(--accent-wash);
+
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-good-wash: var(--good-wash);
+  --color-warn-wash: var(--warn-wash);
+  --color-bad-wash: var(--bad-wash);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-seq-1: var(--seq-1);
+  --color-seq-2: var(--seq-2);
+  --color-seq-3: var(--seq-3);
+  --color-seq-4: var(--seq-4);
+  --color-seq-5: var(--seq-5);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
 
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Iowan Old Style", Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-/* The whole product now lives in the dark aurora theme; the light tokens above
-   stay for the future "light mode" toggle. */
 html {
-  background: #050506;
-  color: #fff;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 body {
@@ -43,79 +256,340 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
-   Onboarding — dark aurora + glassmorphism. Deliberately separate from the
-   light editorial app theme above; scoped to .ob-* classes so it never leaks
-   into the rest of the product. Applied as a fixed full-screen overlay.
+   Shell + glass surfaces.
+
+   Light mode used to be `filter: invert(1) hue-rotate(180deg)` over the dark
+   theme, which is why it looked wrong — an inversion is not a design. Both
+   themes are now authored directly. Removing that filter also removes the last
+   composited-layer ancestor over form fields (see the Android IME bug).
    --------------------------------------------------------------------------- */
 .ob-root {
   position: fixed;
   inset: 0;
   z-index: 50;
   overflow-y: auto;
-  color: #fff;
+  color: var(--ink);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(58% 48% at 21% 44%, rgba(41, 84, 214, 0.55), transparent 70%),
-    radial-gradient(54% 54% at 79% 42%, rgba(255, 255, 255, 0.5), transparent 72%),
-    radial-gradient(42% 42% at 50% 50%, rgba(224, 214, 208, 0.16), transparent 70%),
-    #050506;
+  background: var(--aurora);
 }
 
+/* ---------------------------------------------------------------------------
+   The field.
+
+   Replaces the halftone burst. Under "colour is the background" the field has
+   to be the loudest thing on screen, and a dot grid competing with a saturated
+   gradient made both look like noise.
+
+   It stays in `background-image` on .ob-root rather than becoming a wrapping
+   element — deliberately, so no composited layer is ever created *above* the
+   form fields (the Android IME cursor bug). Panels blur what is behind them
+   with backdrop-filter, which composites the panel itself and not its
+   ancestors, so that constraint still holds.
+   --------------------------------------------------------------------------- */
+/* Focal point of the first bloom. Defaults sit left of the content column; on
+   a desktop with a real mouse <CursorTexture> eases these toward the pointer,
+   so the field drifts under the glass instead of sitting still. */
+:root {
+  --tex-x: 6%;
+  --tex-y: 48%;
+}
+
+.ob-root {
+  background: var(--aurora);
+  background-attachment: fixed;
+}
+
+/* On a phone the field is the whole viewport with nothing beside the content,
+   so the blooms are pulled in and softened — at 360px the full-strength field
+   turns every glass panel into a different colour and the page stops reading
+   as one surface. */
+@media (max-width: 640px) {
+  .ob-root {
+    background:
+      radial-gradient(80% 34% at var(--tex-x) 12%, #ff8fb1 0%, rgba(255, 143, 177, 0.4) 45%, transparent 78%),
+      radial-gradient(86% 38% at 92% 88%, #c77dff 0%, rgba(199, 125, 255, 0.34) 46%, transparent 80%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+}
+
+@media (max-width: 640px) {
+  html[data-theme="dark"] .ob-root {
+    background:
+      radial-gradient(80% 34% at var(--tex-x) 12%, #42123a 0%, rgba(66, 18, 58, 0.55) 45%, transparent 78%),
+      radial-gradient(86% 38% at 92% 88%, #221340 0%, rgba(34, 19, 64, 0.5) 46%, transparent 80%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile chrome.
+
+   The bottom tab bar is the primary navigation on a phone, so two things have
+   to be true: it must sit above the home indicator, and page content must be
+   able to scroll clear of it. Both are handled here rather than with utility
+   classes, because `env(safe-area-inset-*)` cannot be expressed in a Tailwind
+   arbitrary value without repeating the whole calc() at every call site.
+
+   `--ga-tabbar-h` is the bar's own height (icon + label + padding); content
+   padding is that height plus the inset plus normal page rhythm.
+   --------------------------------------------------------------------------- */
+:root {
+  --ga-tabbar-h: 3.75rem;
+  /* Height of the consent banner while it is open, written by ConsentGate.
+     The banner is fixed to the bottom of the viewport, so on a phone it lands
+     on top of whatever the page's primary action is — at 360x800 it covered
+     the onboarding "Create account" button outright, which is the first tap of
+     the funnel on the device the funnel runs on. Layouts below reserve it. */
+  --ga-consent-h: 0px;
+}
+
+/* The top bar is glass for the same reason a Mac toolbar is: nav sitting
+   directly on the field is legible (it was checked) but visually unanchored —
+   the page has no edge and the links float on colour. A translucent bar gives
+   the content a top without hiding the field behind it. */
+.ga-topbar {
+  background: color-mix(in oklab, var(--glass-film) 82%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--glass-edge) 60%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* The tab bar is glass too, but a heavier film than a card: it is pinned over
+   scrolling content rather than over the field, so whatever passes beneath it
+   would otherwise show through as moving colour under the labels. */
+.ga-tabbar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--glass-film-hi);
+  border-top: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: inset 0 1px 0 var(--glass-specular);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ga-tabbar {
+    background: var(--bg);
+  }
+}
+
+@media (max-width: 767px) {
+  .ga-main {
+    padding-bottom: calc(
+      var(--ga-tabbar-h) + var(--ga-consent-h) + env(safe-area-inset-bottom, 0px) + 1.5rem
+    );
+  }
+
+  /* The onboarding step centres itself in the viewport and cannot be scrolled
+     clear, so the banner's height has to come out of the box it centres in. */
+  .ob-root > main {
+    min-height: calc(100vh - 4.5rem - var(--ga-consent-h));
+  }
+
+  /* Page content can be scrolled out from under the banner; the tab bar
+     cannot. Stack the banner on top of it rather than over it. */
+  html[data-tabbar] .ga-consent {
+    bottom: calc(var(--ga-tabbar-h) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The completion checkbox.
+
+   This is the single most important control in the product — the Reality
+   Engine has exactly one input, and it is this box. A native checkbox styled
+   only with `accent-color` gets its colour when *checked*; unchecked, on the
+   dark theme, it renders as a near-black square with no visible edge, so it
+   reads as a disabled placeholder rather than "tap me". Given the first beta
+   user ticked 0 of 26 tasks on a phone, an invisible affordance is not a
+   cosmetic problem.
+
+   Drawn explicitly instead: a clearly bordered empty box, and a filled accent
+   box with a checkmark once done.
+   --------------------------------------------------------------------------- */
+.ga-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border-radius: 0.5rem;
+  /* Solid ink border, not a veil percentage. On glass the old translucent edge
+     washed out over a light stop of the field, and this is the control the
+     Reality Engine has as its only input — it already shipped invisible once. */
+  border: 2px solid color-mix(in oklab, var(--ink) 55%, transparent);
+  background: color-mix(in oklab, var(--veil) 7%, transparent);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+.ga-check::before {
+  content: "";
+  width: 0.8rem;
+  height: 0.8rem;
+  transform: scale(0);
+  transition: transform 0.12s ease-out;
+  background: var(--accent-contrast);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+.ga-check:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--accent) 70%, transparent);
+}
+.ga-check:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ga-check:checked::before {
+  transform: scale(1);
+}
+.ga-check:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ga-check,
+  .ga-check::before {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Liquid Glass.
+
+   Both themes are now real glass — the previous light mode faked it with an opaque
+   card because a pale background gave the blur nothing to work with. The
+   saturated field fixes exactly that, which is the whole argument for the
+   direction.
+
+   Four things make it read as glass rather than as a translucent rectangle:
+   the blur, the saturate boost (colour behind it stays vivid instead of going
+   grey), a bright specular line along the top edge where light would catch,
+   and a shadow that separates the panel from the field. The specular is an
+   inset box-shadow rather than a ::before, because .ob-glass is applied to
+   <input> elements too and pseudo-elements do not render on them.
+   --------------------------------------------------------------------------- */
 .ob-glass {
-  background: rgba(255, 255, 255, 0.08);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--glass-film);
+  border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 var(--glass-specular),
+    var(--glass-shadow);
 }
 .ob-glass::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ink-muted);
 }
 .ob-glass:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.13);
+  background: var(--glass-film-hi);
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 var(--glass-specular),
+    0 0 0 3px color-mix(in oklab, var(--accent) 26%, transparent);
 }
 
+/* Where the blur cannot be honoured, fall back to a film opaque enough to keep
+   the contrast maths true — otherwise text would sit straight on the field. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ob-glass {
+    background: color-mix(in oklab, var(--surface) 92%, transparent);
+  }
+}
+
+/* Primary action — the one solid object on a page of glass.
+
+   Deliberately NOT translucent. Every panel here is see-through, so a
+   see-through button is just another panel; making the primary action the only
+   opaque, saturated surface is what makes it findable. It is a gradient rather
+   than a flat fill so it belongs to the field it sits on, and both stops were
+   checked under --accent-contrast: 5.49:1 at the lightest, 9.05:1 at the
+   deepest. The specular line is the same one the panels carry. */
 .ob-btn {
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  background: rgba(18, 18, 20, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  transition: background 0.15s ease;
+  background: linear-gradient(160deg, #c81e63 0%, var(--accent) 55%, var(--accent-hover) 100%);
+  color: var(--accent-contrast);
+  border: 1px solid color-mix(in oklab, var(--accent-hover) 70%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 6px 20px color-mix(in oklab, var(--accent) 34%, transparent);
+  transition:
+    filter 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+html[data-theme="dark"] .ob-btn {
+  background: linear-gradient(160deg, var(--accent-hover) 0%, var(--accent) 55%, #e97bb0 100%);
+  border-color: color-mix(in oklab, #ffffff 24%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 6px 22px rgba(255, 143, 177, 0.24);
 }
 .ob-btn:hover:not(:disabled) {
-  background: rgba(44, 44, 48, 0.7);
+  filter: brightness(1.06) saturate(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 10px 28px color-mix(in oklab, var(--accent) 46%, transparent);
+}
+.ob-btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 .ob-btn:disabled {
   opacity: 0.45;
 }
 
-/* Native date picker: keep glass look, invert the calendar icon to white. */
+/* Secondary / quiet action — glass, so it reads as a surface rather than an
+   action. That contrast with the solid primary is the whole hierarchy. */
+.ob-btn-quiet {
+  background: var(--glass-film);
+  color: var(--ink-2);
+  border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  box-shadow: inset 0 1px 0 var(--glass-specular);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.ob-btn-quiet:hover:not(:disabled) {
+  background: var(--glass-film-hi);
+  color: var(--ink);
+  border-color: color-mix(in oklab, var(--accent) 40%, transparent);
+}
+.ob-btn-quiet:disabled {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-btn {
+    transition: none;
+  }
+  .ob-btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 .ob-date::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: pointer;
 }
-
-/* ---------------------------------------------------------------------------
-   Light mode — toggled from DarkNav ("light mode"), persisted in localStorage
-   as goalassist_theme, applied as data-theme on <html>. Implemented as a
-   faithful inversion of the whole dark system: near-black becomes white, white
-   text becomes black; hue-rotate keeps the status colors in their families.
-   --------------------------------------------------------------------------- */
-html[data-theme="light"] {
-  background: #fafaf9;
-}
-html[data-theme="light"] .ob-root {
-  filter: invert(1) hue-rotate(180deg);
+html[data-theme="dark"] .ob-date::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
-/* Step-to-step transitions are handled by motion/react (see onboarding page). */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* "Building your plan" progress fill — sweeps to ~92% while the API works. */
 .ob-building-fill {
   width: 10%;
-  background: linear-gradient(90deg, rgba(120, 150, 210, 0.7), rgba(170, 120, 160, 0.7));
+  background: linear-gradient(90deg, var(--accent), var(--chart-3));
   animation: ob-load 2.4s ease-out forwards;
 }
 @keyframes ob-load {
@@ -127,9 +601,33 @@ html[data-theme="light"] .ob-root {
   }
 }
 
+/* Skeleton shimmer for loading states. */
+.ob-skeleton {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--veil) 6%, transparent) 25%,
+    color-mix(in oklab, var(--veil) 12%, transparent) 37%,
+    color-mix(in oklab, var(--veil) 6%, transparent) 63%
+  );
+  background-size: 400% 100%;
+  animation: ob-shimmer 1.4s ease-in-out infinite;
+  border-radius: 0.75rem;
+}
+@keyframes ob-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ob-building-fill {
     animation: none;
     width: 60%;
+  }
+  .ob-skeleton {
+    animation: none;
   }
 }

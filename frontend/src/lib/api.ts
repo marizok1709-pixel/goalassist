@@ -10,6 +10,13 @@ export interface User {
   degree: string | null;
   year: number | null;
   availability: Record<string, number> | null;
+  /**
+   * True once the student has set real hours per day at /timing. Onboarding's
+   * rest-day answer leaves it false, which is what the dashboard nudge keys on.
+   */
+  availability_refined?: boolean;
+  /** Read-only operator flag. Set only via backend/make_admin.py. */
+  is_admin?: boolean;
 }
 
 export type GoalStatus = "active" | "completed" | "failed" | "archived";
@@ -195,6 +202,91 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ---------- Endpoints ----------
 
+
+// ---------- Admin dashboard ----------
+
+export interface AdminOverview {
+  generated_at: string;
+  users: {
+    total: number; new_today: number; new_7d: number; new_30d: number;
+    returning_7d: number; online_now: number; consented_to_analytics: number;
+    consent_rate_pct: number;
+  };
+  engagement: {
+    basis: string; dau: number; wau: number; mau: number;
+    dau_by_work: number; wau_by_work: number; mau_by_work: number;
+  };
+  sessions_30d: { anonymous: number; registered: number };
+  content: { goals: number; materials: number; scheduled_tasks: number; tasks_completed: number };
+  has_data: boolean;
+}
+
+export interface AdminActivityPoint {
+  date: string; events: number; sessions: number;
+  active_users: number; new_users: number; work_completed: number;
+}
+export interface AdminActivity { days: number; series: AdminActivityPoint[]; has_data: boolean }
+
+export interface AdminSessions {
+  days: number; sessions: number; sessions_per_day: number;
+  avg_duration_seconds: number; median_duration_seconds: number;
+  single_event_sessions: number; has_data: boolean;
+}
+
+export interface AdminBucket { key: string; count: number }
+export interface AdminFeatures {
+  days: number; events: AdminBucket[]; paths: AdminBucket[]; devices: AdminBucket[];
+  browsers: AdminBucket[]; languages: AdminBucket[]; countries: AdminBucket[];
+  referrers: AdminBucket[];
+}
+
+export interface AdminRetention {
+  weeks: number; basis: string; has_data: boolean;
+  cohorts: { cohort: string; size: number; retained: number[]; retained_pct: number[] }[];
+}
+
+export interface AdminUserGoal { title: string; deadline: string }
+export interface AdminUserRow {
+  id: number;
+  email: string;
+  name: string;
+  note: string | null;
+  is_admin: boolean;
+  analytics_consent: boolean;
+  created_at: string;
+  goals: AdminUserGoal[];
+  tasks_total: number;
+  tasks_completed: number;
+  last_active: string | null;
+}
+
+export interface AdminInfrastructure {
+  api: {
+    window_seconds: number; requests_in_window: number; requests_per_minute: number;
+    latency_ms: { p50: number; p95: number; p99: number; max: number };
+    failed_requests: number; server_errors: number; error_rate_pct: number;
+    lifetime: { requests: number; errors: number; uptime_seconds: number };
+  };
+  database: { ping_ms: number; dialect: string };
+  process: {
+    memory_rss_mb: number; cpu_count: number | null;
+    load_avg_1m: number | null; load_avg_5m: number | null; load_avg_15m: number | null;
+    python: string;
+  };
+  caveat: string;
+}
+
+export interface AdminFinance {
+  currency: string;
+  totals: {
+    revenue_cents: number; expense_cents: number; credit_cents: number;
+    debit_cents: number; net_cents: number; mrr_cents: number;
+  };
+  transactions: number; paying_users: number;
+  series: { month: string; revenue_cents: number; expense_cents: number; net_cents: number }[];
+  has_data: boolean; note: string;
+}
+
 export const api = {
   register: (data: {
     email: string;
@@ -223,6 +315,7 @@ export const api = {
     degree?: string;
     year?: number;
     availability?: Record<string, number>;
+    availability_refined?: boolean;
   }) => request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(data) }),
 
   createGoal: (data: {
@@ -258,6 +351,51 @@ export const api = {
     request<Material>(`/goals/${goalId}/materials/${materialId}`, {
       method: "PATCH",
       body: JSON.stringify({ completed_quantity }),
+    }),
+
+  /** Correct a material's definition after the mission exists. Send only what changed. */
+  editMaterial: (
+    goalId: number,
+    materialId: number,
+    data: { name?: string; total_quantity?: number; unit?: string }
+  ) =>
+    request<Material>(`/goals/${goalId}/materials/${materialId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteMaterial: (goalId: number, materialId: number) =>
+    request<void>(`/goals/${goalId}/materials/${materialId}`, { method: "DELETE" }),
+
+  /** Mirror the local consent decision onto the account (server enforces it too). */
+  setConsent: (analytics_consent: boolean) =>
+    request<{ analytics_consent: boolean; updated_at: string | null }>("/me/consent", {
+      method: "PUT",
+      body: JSON.stringify({ analytics_consent }),
+    }),
+
+  getConsent: () =>
+    request<{ analytics_consent: boolean; updated_at: string | null }>("/me/consent"),
+
+  /** GDPR access + portability: everything held about this account. */
+  exportMyData: () => request<Record<string, unknown>>("/me/export"),
+
+  /** GDPR erasure: irreversible, cascades to every related row. */
+  deleteMyAccount: () => request<void>("/me", { method: "DELETE" }),
+
+  // ----- admin (server enforces is_admin; 404 when not an operator) -----
+  adminOverview: () => request<AdminOverview>("/admin/overview"),
+  adminActivity: (days = 30) => request<AdminActivity>(`/admin/activity?days=${days}`),
+  adminSessions: (days = 30) => request<AdminSessions>(`/admin/sessions?days=${days}`),
+  adminFeatures: (days = 30) => request<AdminFeatures>(`/admin/features?days=${days}`),
+  adminRetention: (weeks = 6) => request<AdminRetention>(`/admin/retention?weeks=${weeks}`),
+  adminInfrastructure: () => request<AdminInfrastructure>("/admin/infrastructure"),
+  adminFinance: (months = 12) => request<AdminFinance>(`/admin/finance?months=${months}`),
+  adminUsers: () => request<AdminUserRow[]>("/admin/users"),
+  setUserNote: (userId: number, note: string | null) =>
+    request<AdminUserRow>(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ note }),
     }),
 
   plan: (goalId: number) => request<Plan>(`/goals/${goalId}/plan`),

@@ -18,3 +18,5 @@ frontend/*.tsbuildinfo
 # Secrets
 .env
 .env.*
+.vercel
+.env*

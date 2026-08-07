@@ -4,18 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, getToken } from "@/lib/api";
 import { DarkShell } from "@/components/darkchrome";
-
-const DAYS: { key: string; label: string }[] = [
-  { key: "mon", label: "Monday" },
-  { key: "tue", label: "Tuesday" },
-  { key: "wed", label: "Wednesday" },
-  { key: "thu", label: "Thursday" },
-  { key: "fri", label: "Friday" },
-  { key: "sat", label: "Saturday" },
-  { key: "sun", label: "Sunday" },
-];
-
-const glassInput = "ob-glass w-full rounded-xl px-4 py-2.5 text-sm text-white";
+import { DAYS, Field, PageHeader, PageLoading, SectionLabel, glassInput } from "@/components/ui";
+import { PrivacyControls } from "@/components/privacy-controls";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -46,7 +36,7 @@ export default function SettingsPage() {
   if (!profile) {
     return (
       <DarkShell>
-        <p className="py-24 text-center text-white/50">loading…</p>
+        <PageLoading />
       </DarkShell>
     );
   }
@@ -88,57 +78,57 @@ export default function SettingsPage() {
   return (
     <DarkShell width="max-w-md">
       <div className="pt-6">
-        <h1 className="text-3xl font-bold tracking-tight text-white">Settings</h1>
+        <PageHeader title="Settings" />
 
-        <section className="ob-glass mt-7 rounded-3xl p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">Profile</p>
-          <form onSubmit={saveProfile} className="mt-4 space-y-3">
-            <label className="block">
-              <span className="mb-1 block text-xs text-white/50">Name</span>
+        <section className="ob-glass mt-8 rounded-3xl p-6">
+          <SectionLabel>Profile</SectionLabel>
+          <form onSubmit={saveProfile} className="mt-4 space-y-4">
+            <Field label="Name" htmlFor="settings-name">
               <input
+                id="settings-name"
                 className={glassInput}
                 value={profile.name}
                 onChange={(e) => setProfile({ ...profile, name: e.target.value })}
                 required
               />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs text-white/50">University</span>
+            </Field>
+            <Field label="University" htmlFor="settings-university">
               <input
+                id="settings-university"
                 className={glassInput}
                 placeholder="TUM"
                 value={profile.university}
                 onChange={(e) => setProfile({ ...profile, university: e.target.value })}
               />
-            </label>
-            <p className="text-xs text-white/45">Signed in as {email}</p>
-            {saved === "profile" && <p className="text-sm text-emerald-300">✓ Profile saved.</p>}
+            </Field>
+            <p className="text-xs text-ink-muted">Signed in as {email}</p>
+            {saved === "profile" && <p className="text-sm text-good">✓ Profile saved.</p>}
             <button className="ob-btn rounded-xl px-6 py-2.5 text-sm font-semibold" disabled={busy}>
               Save profile
             </button>
           </form>
         </section>
 
-        <section className="ob-glass mt-5 rounded-3xl p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
-            Weekly availability
-          </p>
-          <p className="mt-1.5 text-xs text-white/45">
+        <section className="ob-glass mt-4 rounded-3xl p-6">
+          <SectionLabel>Weekly availability</SectionLabel>
+          <p className="mt-1.5 text-xs text-ink-muted">
             Study hours per weekday, 0 = rest day. Every mission&apos;s schedule redistributes
             around this — a 4-hour day carries twice the load of a 2-hour day.
           </p>
           <form onSubmit={saveAvailability} className="mt-4 space-y-2">
             {DAYS.map((d) => (
-              <label key={d.key} className="flex items-center justify-between gap-4">
-                <span className={`text-sm ${Number(hours[d.key]) > 0 ? "text-white/85" : "text-white/45"}`}>
+              <label key={d.key} htmlFor={`hours-${d.key}`} className="flex items-center justify-between gap-4">
+                <span className={`text-sm ${Number(hours[d.key]) > 0 ? "text-ink" : "text-ink-muted"}`}>
                   {d.label}
                   {Number(hours[d.key]) === 0 && (
-                    <span className="ml-2 text-[10px] font-semibold uppercase text-white/40">rest</span>
+                    <span className="ml-2 text-[10px] font-semibold uppercase text-ink-muted">rest</span>
                   )}
                 </span>
                 <input
-                  className="ob-glass w-24 rounded-xl px-4 py-2 text-right text-sm text-white tnum"
+                  id={`hours-${d.key}`}
+                  className="ob-glass w-24 rounded-xl px-4 py-2 text-right text-sm text-ink tnum"
                   type="number"
+                  inputMode="decimal"
                   min="0"
                   max="16"
                   step="0.5"
@@ -147,9 +137,9 @@ export default function SettingsPage() {
                 />
               </label>
             ))}
-            <p className="pt-1 text-right text-xs text-white/45 tnum">{total} h/week</p>
+            <p className="pt-1 text-right text-xs text-ink-muted tnum">{total} h/week</p>
             {saved === "availability" && (
-              <p className="text-sm text-emerald-300">✓ Saved — all schedules redistributed.</p>
+              <p className="text-sm text-good">✓ Saved — all schedules redistributed.</p>
             )}
             <button
               className="ob-btn w-full rounded-xl px-6 py-3 text-sm font-semibold"
@@ -158,15 +148,16 @@ export default function SettingsPage() {
               Save & reschedule
             </button>
             {total === 0 && (
-              <p className="text-center text-xs text-red-300">
+              <p className="text-center text-xs text-bad">
                 At least one day needs hours — the work has to land somewhere.
               </p>
             )}
           </form>
         </section>
 
-        {error && <p className="mt-4 text-sm text-red-300">✕ {error}</p>}
+        {error && <p className="mt-4 text-sm text-bad">✕ {error}</p>}
       </div>
+      <PrivacyControls />
     </DarkShell>
   );
 }

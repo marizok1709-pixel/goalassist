@@ -30,9 +30,31 @@ class User(Base):
     year: Mapped[int | None] = mapped_column(default=None)
     # Weekly study hours: {"mon": 2.0, "tue": 0.0, ...}. None = every day equal.
     availability: Mapped[dict | None] = mapped_column(JSON, default=None)
+    # Whether the hours above are real numbers the student chose, or just the
+    # coarse study-day/rest-day default onboarding writes. The dashboard nudges
+    # towards /timing until this is true. It cannot be inferred from the hours
+    # themselves — a student who genuinely picks the default value on every
+    # study day is byte-identical to one who never answered.
+    availability_refined: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+    # Operator flag. Deliberately has no self-service path: nothing in the API
+    # can set it, so an admin is only ever created by a direct DB update.
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Product-analytics consent. Defaults to False and stays False until the
+    # user actively opts in — no analytics event is accepted before that.
+    analytics_consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    consent_updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+    # Operator-only free-text note about this account (e.g. "my friend, found
+    # the mobile bug"). Admin-authored, never shown to the user. Nullable.
+    note: Mapped[str | None] = mapped_column(String(500), default=None)
+
     goals: Mapped[list["Goal"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    events: Mapped[list["AnalyticsEvent"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Goal(Base):
@@ -117,3 +139,82 @@ class ScheduledTask(Base):
 
     goal: Mapped[Goal] = relationship(back_populates="scheduled_tasks")
     progress_unit: Mapped[ProgressUnit | None] = relationship()
+
+
+class AnalyticsEvent(Base):
+    """One product-analytics event.
+
+    Deliberately narrow. What is NOT here matters as much as what is: no IP
+    address, no user agent string, no free-text from the user, no page URL with
+    query parameters. Location is a two-letter country at most. `user_id` is a
+    foreign key rather than an email, so the row is pseudonymous on its own and
+    disappears with the account (cascade delete).
+
+    `props` is a small JSON bag for event-specific numbers/enums. Anything
+    identifying belongs nowhere near it — see PRIVACY.md.
+    """
+
+    __tablename__ = "analytics_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Null for logged-out visitors, who are only ever counted, never identified.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, default=None
+    )
+    # Rotating client-side id so a visit can be stitched into a session without
+    # knowing who the person is. Not stable across days.
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    props: Mapped[dict | None] = mapped_column(JSON, default=None)
+
+    # Coarse context, all low-cardinality by design.
+    path: Mapped[str | None] = mapped_column(String(120), default=None)
+    device: Mapped[str | None] = mapped_column(String(16), default=None)  # mobile|tablet|desktop
+    browser: Mapped[str | None] = mapped_column(String(24), default=None)
+    viewport_w: Mapped[int | None] = mapped_column(default=None)
+    language: Mapped[str | None] = mapped_column(String(12), default=None)
+    country: Mapped[str | None] = mapped_column(String(2), default=None)
+    referrer_host: Mapped[str | None] = mapped_column(String(120), default=None)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    user: Mapped["User | None"] = relationship(back_populates="events")
+
+
+class TransactionKind(str, enum.Enum):
+    revenue = "revenue"
+    expense = "expense"
+    credit = "credit"
+    debit = "debit"
+
+
+class Transaction(Base):
+    """Money in and out.
+
+    GoalAssist has no payments yet — premium is deliberately deferred until
+    retention is proven — so this table is empty and the finance dashboard reads
+    genuine zeros from it. It exists now so that when billing does arrive the
+    dashboard needs a writer, not a rewrite.
+
+    Amounts are integer minor units (cents). Floats have no business in money.
+    """
+
+    __tablename__ = "transactions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[TransactionKind] = mapped_column(Enum(TransactionKind), index=True)
+    amount_cents: Mapped[int] = mapped_column()
+    currency: Mapped[str] = mapped_column(String(3), default="EUR")
+
+    # Nullable so platform costs (hosting, database) can be recorded too.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, default=None
+    )
+    description: Mapped[str | None] = mapped_column(String(200), default=None)
+    # Id from whatever processor eventually handles this, for reconciliation.
+    external_ref: Mapped[str | None] = mapped_column(String(120), default=None)
+    # True while a subscription is live — what MRR is summed from.
+    is_recurring: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
