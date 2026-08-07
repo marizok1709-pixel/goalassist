@@ -206,6 +206,7 @@ def export_my_data(user: User = Depends(get_current_user), db: Session = Depends
             "degree": user.degree,
             "year": user.year,
             "availability": user.availability,
+            "availability_refined": user.availability_refined,
             "analytics_consent": user.analytics_consent,
             "consent_updated_at": user.consent_updated_at.isoformat()
             if user.consent_updated_at

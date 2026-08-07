@@ -52,8 +52,23 @@ export default function DashboardPage() {
   );
   const hero = goals[0];
   const rest = goals.slice(1);
+  // Three states, not two. Onboarding's `rhythm` step now sets every study day
+  // to the same default, so "has any non-zero hour" would hide the nudge for
+  // everyone the moment they registered. A schedule that only knows rest days
+  // is still worth sharpening — and accounts created before that step existed
+  // have no availability at all and need the original, stronger prompt.
+  //
+  // `set` comes from the stored flag, never from reading the hours back: the
+  // student who steps every study day to the default value at /timing has
+  // answered the question, and an inference cannot tell them apart from
+  // someone who never opened the page.
   const av = data.user.availability;
-  const hasTiming = !!av && Object.values(av).some((v) => v > 0);
+  const hours = av ? Object.values(av) : [];
+  const timing: "none" | "coarse" | "set" = data.user.availability_refined
+    ? "set"
+    : !av || hours.every((v) => v <= 0)
+      ? "none"
+      : "coarse";
 
   return (
     <DarkShell>
@@ -62,9 +77,9 @@ export default function DashboardPage() {
           {greeting()}, {data.user.name.toUpperCase()}
         </p>
 
-        {/* Post-onboarding nudge: the schedule works on an even default until
-            the student sets their real weekly rhythm. */}
-        {!hasTiming && (
+        {/* Post-onboarding nudge: the schedule works on a coarse default until
+            the student sets real hours per day. */}
+        {timing !== "set" && (
           <Link href="/timing">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -72,9 +87,13 @@ export default function DashboardPage() {
               className="ob-glass mt-5 flex items-center justify-between gap-4 rounded-2xl px-5 py-4 transition-colors hover:bg-veil/[0.12]"
             >
               <div>
-                <p className="text-sm font-semibold text-ink">Design your schedule</p>
+                <p className="text-sm font-semibold text-ink">
+                  {timing === "none" ? "Design your schedule" : "Sharpen your schedule"}
+                </p>
                 <p className="mt-0.5 text-sm text-ink-2">
-                  Right now work spreads evenly. Tell us when you actually study to sharpen the plan.
+                  {timing === "none"
+                    ? "Right now work spreads evenly. Tell us when you actually study to sharpen the plan."
+                    : "Your rest days are set. Add real hours per day and heavier days will carry more work."}
                 </p>
               </div>
               <span className="shrink-0 text-ink-2">→</span>

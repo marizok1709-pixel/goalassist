@@ -10,6 +10,11 @@ export interface User {
   degree: string | null;
   year: number | null;
   availability: Record<string, number> | null;
+  /**
+   * True once the student has set real hours per day at /timing. Onboarding's
+   * rest-day answer leaves it false, which is what the dashboard nudge keys on.
+   */
+  availability_refined?: boolean;
   /** Read-only operator flag. Set only via backend/make_admin.py. */
   is_admin?: boolean;
 }
@@ -310,6 +315,7 @@ export const api = {
     degree?: string;
     year?: number;
     availability?: Record<string, number>;
+    availability_refined?: boolean;
   }) => request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(data) }),
 
   createGoal: (data: {

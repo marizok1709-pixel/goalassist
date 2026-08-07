@@ -17,6 +17,15 @@ import type { ReactNode } from "react";
 
 export const glassInput = "ob-glass w-full rounded-xl px-4 py-2.5 text-sm text-ink";
 
+/**
+ * Hours a study day is worth when onboarding has only asked rest-day / study-day
+ * (the `rhythm` step). The engine reads these weights relative to each other, so
+ * what matters is which days are 0 — but the dashboard also uses this value to
+ * recognise an availability that is still the coarse default and invite the
+ * student to refine it at /timing.
+ */
+export const STUDY_DAY_HOURS = 2;
+
 export const DAYS: { key: string; label: string }[] = [
   { key: "mon", label: "Mon" },
   { key: "tue", label: "Tue" },

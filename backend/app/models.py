@@ -30,6 +30,12 @@ class User(Base):
     year: Mapped[int | None] = mapped_column(default=None)
     # Weekly study hours: {"mon": 2.0, "tue": 0.0, ...}. None = every day equal.
     availability: Mapped[dict | None] = mapped_column(JSON, default=None)
+    # Whether the hours above are real numbers the student chose, or just the
+    # coarse study-day/rest-day default onboarding writes. The dashboard nudges
+    # towards /timing until this is true. It cannot be inferred from the hours
+    # themselves — a student who genuinely picks the default value on every
+    # study day is byte-identical to one who never answered.
+    availability_refined: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Operator flag. Deliberately has no self-service path: nothing in the API

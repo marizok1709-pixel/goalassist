@@ -5,16 +5,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { api, ApiError, setToken } from "@/lib/api";
-import { DarkNav } from "@/components/darkchrome";
+import { DarkNav, DayChip } from "@/components/darkchrome";
 import { TextField } from "@/components/textfield";
+import { DAYS, STUDY_DAY_HOURS } from "@/components/ui";
 import { analytics } from "@/lib/analytics";
 
 // The conversational step machine. Register creates the account (token) up
 // front; every later answer is held in local state until "building", which
-// fires createGoal → addMaterial(s). Weekly availability is NOT collected here
-// — students meet the dashboard/daily loop first, then set timing via the
-// "design your schedule" nudge (/timing). Until then the schedule spreads
-// work evenly (the engine defaults to even weighting when availability is null).
+// fires updateMe(availability) → createGoal → addMaterial(s).
+//
+// The "rhythm" step exists because the flow previously could not produce
+// availability at all: the timing question was moved out to /timing behind a
+// dashboard nudge, and the first real beta user never followed it. Their 26
+// tasks landed on 13 consecutive days with no rest day — a plan nobody keeps.
+// It asks only which days are rest days; hours stay refinable at /timing.
 type Step =
   | "welcome"
   | "register"
@@ -22,6 +26,7 @@ type Step =
   | "deadline"
   | "materials"
   | "howfar"
+  | "rhythm"
   | "building"
   | "launch";
 
@@ -32,13 +37,14 @@ const STEP_ORDER: Step[] = [
   "deadline",
   "materials",
   "howfar",
+  "rhythm",
   "building",
   "launch",
 ];
 
-// Progress-dot order: dots span the four content questions only;
+// Progress-dot order: dots span the five content questions only;
 // welcome / register / building / launch sit outside the counter.
-const COUNTED: Step[] = ["goal", "deadline", "materials", "howfar"];
+const COUNTED: Step[] = ["goal", "deadline", "materials", "howfar", "rhythm"];
 
 // Directional page transition: content lifts + de-blurs into place over a
 // persistent background, previous content lifts + blurs away first. Easing is
@@ -90,6 +96,11 @@ interface Launched {
   remaining: { name: string; amount: number; unit: string }[];
 }
 
+/** Weekly availability in the shape the API stores: hours per weekday, 0 = rest. */
+function availabilityFrom(restDays: Set<string>): Record<string, number> {
+  return Object.fromEntries(DAYS.map((d) => [d.key, restDays.has(d.key) ? 0 : STUDY_DAY_HOURS]));
+}
+
 function daysFromToday(iso: string): number | null {
   if (!iso) return null;
   const ms = new Date(`${iso}T00:00:00`).getTime() - new Date().setHours(0, 0, 0, 0);
@@ -105,6 +116,8 @@ export default function OnboardingPage() {
   const [title, setTitle] = useState("");
   const [deadline, setDeadline] = useState("");
   const [materials, setMaterials] = useState<MaterialDraft[]>(() => [newMaterial()]);
+  // Rest days, by DAYS key. Everything is a study day until tapped off.
+  const [restDays, setRestDays] = useState<Set<string>>(() => new Set());
 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -154,6 +167,12 @@ export default function OnboardingPage() {
     (async () => {
       setError("");
       try {
+        // Availability first, deliberately. The user has no goals yet, so
+        // PATCH /auth/me's reschedule loop is a no-op here — and the first
+        // schedule, built by addMaterial below, is then already weighted
+        // correctly instead of being built wrong and immediately rebuilt.
+        await api.updateMe({ availability: availabilityFrom(restDays) });
+        analytics.track("availability_saved", { from: "onboarding", rest_days: restDays.size });
         const goal = await api.createGoal({ title: title.trim(), deadline });
         const remaining: Launched["remaining"] = [];
         for (const m of namedMaterials) {
@@ -182,7 +201,7 @@ export default function OnboardingPage() {
       } catch (err) {
         if (cancelled) return;
         // navigate() clears error, so set it *after* returning to the step.
-        navigate("howfar");
+        navigate("rhythm");
         setError(err instanceof ApiError ? err.message : "Cannot reach the server");
       }
     })();
@@ -193,6 +212,7 @@ export default function OnboardingPage() {
   }, [step]);
 
   const dLeft = daysFromToday(deadline);
+  const studyDays = DAYS.length - restDays.size;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -422,7 +442,48 @@ export default function OnboardingPage() {
               })}
             </div>
             {error && <ErrorLine msg={error} />}
-            <StepButtons onBack={() => navigate("materials")} onNext={() => navigate("building")} label="Build my plan →" />
+            <StepButtons onBack={() => navigate("materials")} onNext={() => navigate("rhythm")} />
+          </>
+        );
+
+      case "rhythm":
+        return (
+          <>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl md:text-6xl">
+              Which days do you not study?
+            </h1>
+            <p className="mt-3 text-base text-ink-2 sm:text-lg">
+              Tap them off. Nothing gets scheduled on a rest day.
+            </p>
+            <div className="mt-10 flex w-full max-w-xl flex-wrap justify-center gap-3">
+              {DAYS.map((d) => (
+                <DayChip
+                  key={d.key}
+                  label={d.label}
+                  on={!restDays.has(d.key)}
+                  onToggle={() =>
+                    setRestDays((prev) => {
+                      const next = new Set(prev);
+                      if (!next.delete(d.key)) next.add(d.key);
+                      return next;
+                    })
+                  }
+                />
+              ))}
+            </div>
+            <p className="mt-5 text-base text-ink-2 tnum">
+              {studyDays === 0
+                ? "Pick at least one day to study"
+                : `${studyDays} study ${studyDays === 1 ? "day" : "days"} a week`}
+            </p>
+            <p className="mt-2 text-sm text-ink-muted">You can set real hours per day later.</p>
+            {error && <ErrorLine msg={error} />}
+            <StepButtons
+              onBack={() => navigate("howfar")}
+              onNext={() => studyDays > 0 && navigate("building")}
+              disabled={studyDays === 0}
+              label="Build my plan →"
+            />
           </>
         );
 

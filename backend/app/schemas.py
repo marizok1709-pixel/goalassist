@@ -43,6 +43,7 @@ class UserOut(BaseModel):
     degree: str | None
     year: int | None
     availability: dict[str, float] | None
+    availability_refined: bool = False
     # Read-only: exposed so the UI can show the admin link, never writable.
     # UserUpdate has no such field, so PATCH cannot set it.
     is_admin: bool = False
@@ -54,6 +55,10 @@ class UserUpdate(BaseModel):
     degree: str | None = None
     year: int | None = None
     availability: dict[str, float] | None = None
+    # Client-declared: /timing sets it when the student saves real hours,
+    # onboarding's coarse rest-day answer does not. Writable on purpose — the
+    # worst a caller can do with it is silence their own dashboard nudge.
+    availability_refined: bool | None = None
 
 
 class Token(BaseModel):

@@ -32,7 +32,10 @@ export default function TimingPage() {
     setBusy(true);
     setSaved(false);
     try {
-      await api.updateMe({ availability: avail });
+      // The flag is what retires the dashboard nudge. It travels with the save
+      // rather than being inferred from the numbers, because a student is free
+      // to land on exactly the onboarding default here and mean it.
+      await api.updateMe({ availability: avail, availability_refined: true });
       setSaved(true);
     } finally {
       setBusy(false);
@@ -46,7 +49,8 @@ export default function TimingPage() {
         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">When can you actually study?</h1>
         <p className="mt-3 max-w-xl text-lg text-ink-2">
           Set your hours per day and every mission reshuffles around them — heavier days carry more
-          work, a 0-hour day is a rest day. Until you set this, work spreads evenly across the week.
+          work, a 0-hour day is a rest day. Onboarding only asked which days you rest; this is where
+          the plan learns how much each day can actually hold.
         </p>
 
         {!avail ? (
