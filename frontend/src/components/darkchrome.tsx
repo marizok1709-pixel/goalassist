@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -57,6 +58,45 @@ const PRIMARY: { href: string; label: string; icon: React.ReactNode }[] = [
     ),
   },
 ];
+
+/**
+ * The mark, top left, always going home to the dashboard.
+ *
+ * `/` is the dashboard and it redirects itself to onboarding when there is no
+ * token, so a single href is correct signed in or out — no need to branch on
+ * auth the way the bare wordmark used to.
+ *
+ * The art is a bare chrome "G" — no tile, no ring — so it reads as part of the
+ * glass topbar rather than a sticker on top of it. That costs contrast on the
+ * light theme, where a near-white mark sits on near-white glass; the mark's own
+ * hairline outline plus the drop shadow are what keep its edge. `priority`
+ * because this is above the fold on every route.
+ *
+ * The filename carries the art version on purpose. The previous mark shipped as
+ * `logo-g.png`, and beta users already have those bytes cached under a URL that
+ * never changes; a new name is the only thing that guarantees they see this one.
+ */
+function HomeMark({ withWordmark = false }: { withWordmark?: boolean }) {
+  return (
+    <Link
+      href="/"
+      aria-label="GoalAssist — go to dashboard"
+      className="-my-2 flex items-center gap-2.5 py-2"
+    >
+      <Image
+        src="/logo-chrome-g.png"
+        alt=""
+        width={32}
+        height={32}
+        priority
+        className="h-8 w-8 object-contain drop-shadow-sm"
+      />
+      {withWordmark && (
+        <span className="text-base font-bold tracking-tight text-ink">GoalAssist</span>
+      )}
+    </Link>
+  );
+}
 
 function NavIcon({ children, size = 22 }: { children: React.ReactNode; size?: number }) {
   return (
@@ -139,12 +179,7 @@ export function DarkNav() {
       {/* ---------- mobile: compact top bar ---------- */}
       <div className="md:hidden">
         <div className="ga-topbar flex h-14 items-center justify-between gap-2 px-4">
-          <Link
-            href={authed ? "/" : "/onboarding"}
-            className="-my-2 py-2 text-base font-bold tracking-tight text-ink"
-          >
-            GoalAssist
-          </Link>
+          <HomeMark withWordmark />
           <div className="flex items-center gap-1">
             <button
               onClick={toggleTheme}
@@ -218,6 +253,10 @@ export function DarkNav() {
       {/* ---------- desktop: the original row ---------- */}
       <div className="ga-topbar hidden flex-wrap items-center justify-between gap-x-6 gap-y-3 px-8 py-5 text-sm font-medium text-ink-2 md:flex">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          {/* The mark leads the row, so the top-left corner goes home on
+              desktop too — it previously started straight into marketing links
+              and there was no way back to the dashboard from the corner. */}
+          <HomeMark />
           {MARKETING.map((m) => (
             <Link key={m.href} href={m.href} className="transition-colors hover:text-ink">
               {m.label}
