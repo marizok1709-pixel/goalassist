@@ -17,6 +17,20 @@ behind it, so logging 0 marked a task done with no progress recorded; un-ticking
 subtracted the *planned* amount and destroyed real progress; and correcting an
 earlier day never re-evaluated today. Any day is now editable from the calendar.
 
+**Second round, same evening:** the first fix deployed cleanly and the owner
+immediately hit the *display* half of the same defect — a missed Tuesday still
+reading "pages 23-25" beside a correctly re-planned Wednesday reading "pages
+21-23". The arithmetic was right; a description is a snapshot of the position it
+was built at. Unfinished past days now state the amount owed instead
+(`plan._settled_description`). **Not deployed either.**
+
+**Also outstanding: the German position is wrong in production.** Unit 28 records
+**20** pages; the owner says he is on **23**. The "update" editor on mission
+detail asks for *completed* pages ("Where are you in X? Completed pages of 161"),
+so this is his to set — 23 if 23 pages are finished, 22 if page 23 is the next
+one he will read. Nothing in the codebase can settle that, and nothing should
+guess it. Until it is set, today's plan is off by three pages.
+
 **Two things are outstanding and both need the owner:**
 
 1. **Deploy.** The fix adds `scheduled_tasks.actual_quantity`; the additive

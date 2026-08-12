@@ -101,7 +101,7 @@ once. `verify.db` is disposable and gitignored.
 
 ### Honest day logging · **shipped 2026-08-12, gated**
 
-`backend/smoke_test_logging.py` (41 checks) plus the correction block in
+`backend/smoke_test_logging.py` (49 checks) plus the correction block in
 `verify/loop.mjs`. Found in live use by the owner, so the suite is written
 against what actually happened rather than against the API surface.
 
@@ -115,9 +115,20 @@ instead of being skipped; today's own row is still rebuilt from tomorrow so
 toggling it cannot delete or duplicate it; a row ticked before
 `actual_quantity` existed is still reversible; overshoot still cascades.
 
-The load-bearing invariant: **`completed` is derived from the amount, never set
-on its own.** Any future code that assigns `task.completed = True` directly is
-re-introducing this bug.
+Also locked: **an unfinished past day does not display a page range.** A
+description is a snapshot of the material's position when the row was built; if
+the position later moves, a missed Tuesday keeps claiming pages that today has
+correctly re-planned, and the app reads as though it went backwards. Completed
+past days keep their range (real history), as do whole discrete items (a mock
+exam's title names a thing, not a position).
+
+Two load-bearing invariants:
+
+1. **`completed` is derived from the amount, never set on its own.** Any future
+   code that assigns `task.completed = True` directly re-introduces this bug.
+2. **A stored `description` is only true for the position it was built at.**
+   Anything rendering one for a past row goes through
+   `plan._settled_description`.
 
 ### Item 2 — ask the one user why
 

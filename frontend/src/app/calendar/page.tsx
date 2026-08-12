@@ -215,7 +215,6 @@ export default function CalendarPage() {
             <ul className="mt-3 space-y-2">
               {selectedTasks.map((t) => {
                 const reported = t.actual_quantity !== null;
-                const missed = !t.completed && !reported && t.date < todayIso;
                 return (
                   <li key={t.id} className="ob-glass overflow-hidden rounded-2xl text-sm">
                     <div className="flex items-start gap-2.5 px-2 py-1 sm:px-4 sm:py-2">
@@ -249,11 +248,9 @@ export default function CalendarPage() {
                             your plan
                           </span>
                         )}
-                        {missed && (
-                          <span className="mt-1 block text-[11px] text-bad">
-                            missed — never reported
-                          </span>
-                        )}
+                        {/* No "missed" note here: a past day nobody reported on
+                            already reads "…3 pages — not done" in its own
+                            description, and saying it twice looks like a bug. */}
                       </span>
                       <button
                         onClick={() => toggleLog(t)}

@@ -121,12 +121,12 @@ def calendar_view(
         .where(Goal.user_id == user.id, ScheduledTask.date >= start_d, ScheduledTask.date <= end_d)
         .order_by(ScheduledTask.date, ScheduledTask.id)
     ).all()
-    return [
-        CalendarTaskOut(
-            **ScheduledTaskOut.model_validate(t).model_dump(), goal_title=t.goal.title
-        )
-        for t in tasks
-    ]
+    out = []
+    for t in tasks:
+        row = ScheduledTaskOut.model_validate(t).model_dump()
+        row["description"] = _settled_description(db, t)
+        out.append(CalendarTaskOut(**row, goal_title=t.goal.title))
+    return out
 
 
 @router.get("/today", response_model=TodayOut)
@@ -163,6 +163,32 @@ def do_more(user: User = Depends(get_current_user), db: Session = Depends(get_db
 
 def _fmt_qty(x: float) -> str:
     return f"{x:.1f}".rstrip("0").rstrip(".")
+
+
+def _settled_description(db: Session, task: ScheduledTask) -> str:
+    """How a finished-with day should read once it is in the past.
+
+    A task's description is a snapshot: "pages 23-25" is stamped in when the row
+    is built, from the material's position at that moment. For a day that was
+    *done*, that range is real history. For a day that was not, the work has
+    since been re-planned and those exact pages mean nothing — yet the row keeps
+    claiming them, so a missed Tuesday saying "pages 23-25" sits next to a
+    correctly re-planned Wednesday saying "pages 21-23" and the app looks like
+    it is walking backwards. That is what it looked like to the owner on
+    2026-08-12, and the numbers were right the whole time.
+
+    So an unfinished past day states what it owed, not which pages it named.
+    Whole discrete items (a mock exam) keep their title — it identifies the
+    thing rather than a position, so it cannot go stale.
+    """
+    if task.completed or task.date >= _today():
+        return task.description
+    unit = db.get(ProgressUnit, task.progress_unit_id) if task.progress_unit_id else None
+    if unit is None or unit.material is None or task.quantity >= unit.quantity - engine.EPS:
+        return task.description
+    m = unit.material
+    owed = f"{m.name}: {_fmt_qty(task.quantity)} {m.unit}"
+    return owed if task.actual_quantity is not None else f"{owed} — not done"
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskUpdateOut)
@@ -281,11 +307,17 @@ def rebuild(goal: Goal = Depends(get_own_goal), db: Session = Depends(get_db)):
 
 @router.get("/goals/{goal_id}/history", response_model=list[ScheduledTaskOut])
 def history(goal: Goal = Depends(get_own_goal), db: Session = Depends(get_db)):
-    return db.scalars(
+    tasks = db.scalars(
         select(ScheduledTask)
         .where(ScheduledTask.goal_id == goal.id, ScheduledTask.date < _today())
         .order_by(ScheduledTask.date.desc(), ScheduledTask.id)
     ).all()
+    out = []
+    for t in tasks:
+        row = ScheduledTaskOut.model_validate(t)
+        row.description = _settled_description(db, t)
+        out.append(row)
+    return out
 
 
 @router.get("/dashboard", response_model=DashboardOut)

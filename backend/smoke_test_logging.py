@@ -301,6 +301,83 @@ check(
 )
 check("the declared starting point survives", after_done >= 0, after_done)
 
+# --------------------------------------------------------------------------
+# 11. A missed day states what it owed, not which pages it named
+#
+# Second report from the owner, 2026-08-12: yesterday's card said "pages 23-25"
+# while today correctly said "pages 21-23", and the app looked like it was
+# walking backwards. The numbers were right; the label was a snapshot taken when
+# the material sat at a position it has since left. A range only means something
+# for a day that was actually done.
+# --------------------------------------------------------------------------
+H8 = register("stale@example.com")
+gid8 = make_mission(H8, already=2.0)
+sched8 = schedule(H8, gid8)
+day1_8 = sched8[0]
+check("a future day names its pages", "-" in day1_8["description"], day1_8["description"])
+backdate(day1_8["id"], YESTERDAY)
+
+# Move the position out from under the past row, exactly as the "I'm on page N"
+# editor does — this is what made the label stale in production.
+mid = client.get(f"/goals/{gid8}/plan", headers=H8).json()["materials"][0]["material_id"]
+client.patch(f"/goals/{gid8}/materials/{mid}", headers=H8, json={"completed_quantity": 0})
+
+cal = client.get(
+    "/calendar",
+    headers=H8,
+    params={"start": (TODAY - timedelta(days=3)).isoformat(), "end": (TODAY + timedelta(days=3)).isoformat()},
+).json()
+past = [t for t in cal if t["date"] == YESTERDAY.isoformat()][0]
+today_row = [t for t in cal if t["date"] == TODAY.isoformat()][0]
+check(
+    "the missed day no longer names a stale page range",
+    "-" not in past["description"].split(":")[-1],
+    past["description"],
+)
+check("the missed day states the amount it owed", "pages" in past["description"], past["description"])
+check("…and says it was not done", "not done" in past["description"], past["description"])
+check("today still names its pages", "-" in today_row["description"], today_row["description"])
+check(
+    "history agrees with the calendar",
+    client.get(f"/goals/{gid8}/history", headers=H8).json()[0]["description"] == past["description"],
+    client.get(f"/goals/{gid8}/history", headers=H8).json()[0]["description"],
+)
+
+# A day that was genuinely done keeps its range — there it is real history.
+H9 = register("realhistory@example.com")
+gid9 = make_mission(H9)
+d9 = schedule(H9, gid9)[0]
+client.patch(f"/tasks/{d9['id']}", headers=H9, json={"completed": True})
+backdate(d9["id"], YESTERDAY)
+cal9 = client.get(
+    "/calendar",
+    headers=H9,
+    params={"start": (TODAY - timedelta(days=3)).isoformat(), "end": TODAY.isoformat()},
+).json()
+done_row = [t for t in cal9 if t["date"] == YESTERDAY.isoformat()][0]
+check(
+    "a completed past day keeps the pages it actually covered",
+    done_row["description"] == d9["description"],
+    f"{done_row['description']} vs {d9['description']}",
+)
+
+# A whole discrete item identifies a thing, not a position, so it cannot go stale.
+H10 = register("wholeunit@example.com")
+gid10 = make_mission(H10, total=3, days=9, unit="mock exams")
+exam = schedule(H10, gid10)[0]
+backdate(exam["id"], YESTERDAY)
+cal10 = client.get(
+    "/calendar",
+    headers=H10,
+    params={"start": (TODAY - timedelta(days=3)).isoformat(), "end": TODAY.isoformat()},
+).json()
+exam_row = [t for t in cal10 if t["date"] == YESTERDAY.isoformat()][0]
+check(
+    "a missed whole item keeps its own title",
+    exam_row["description"] == exam["description"],
+    f"{exam_row['description']} vs {exam['description']}",
+)
+
 print()
 if failures:
     print(f"{len(failures)} FAILURES: {failures}")

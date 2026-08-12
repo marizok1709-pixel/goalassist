@@ -56,7 +56,17 @@ arithmetic behind it.**
 - Days reported below plan say so in words — "logged 0 of 3 — the rest went
   back into your plan" — on both `/today` and the calendar, so a cleared tick
   is never the only signal.
-- `backend/smoke_test_logging.py` (41 checks) and 5 new browser checks in
+- **A missed day states what it owed, not which pages it named.** Reported by
+  the owner an hour after the first fix shipped, and the better bug of the two:
+  Tuesday's card said "pages 23-25" while Wednesday correctly said "pages
+  21-23", so the app looked like it was walking *backwards*. The arithmetic was
+  right the whole time — a task's description is a snapshot taken when the row
+  is built, and the material's position had since moved underneath it. An
+  unfinished past day now reads "3 pages — not done". A **completed** past day
+  keeps its range, because there the pages are real history; so does a whole
+  discrete item like a mock exam, whose title names a thing rather than a
+  position and cannot go stale.
+- `backend/smoke_test_logging.py` (49 checks) and 5 new browser checks in
   `verify/loop.mjs`. See `VERIFICATION.md`.
 - `backend/repair_task.py` — dry-run-by-default repair for rows written while
   the bug was live, where un-ticking through the API would subtract a quantity
