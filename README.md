@@ -4,8 +4,6 @@ Goal Assist is a deadline-driven execution system that turns large goals into co
 
 You give it a **deadline**, your **materials**, and what needs to be completed. Goal Assist breaks the workload down, calculates the pace required to finish on time, and tells you honestly whether you're on track.
 
-> **The problem:** A deadline six months from now tells you almost nothing about what you should do today.
-
 ## Try it
 
 **[Launch Goal Assist](https://goalassist.vercel.app/onboarding)**
@@ -13,11 +11,7 @@ You give it a **deadline**, your **materials**, and what needs to be completed. 
 ## Why I built it
 
 I originally built Goal Assist because of my own German exam preparation.
-
-Having an exam a year away sounded manageable, but the actual question was much harder:
-
-**"What exactly should I do today?"**
-
+Having an exam a year away sounded manageable, but the actual question was much harder.
 I started designing a system for myself that would take a distant goal and turn it into daily actions. After showing it to a colleague, I realized the same problem existed outside my own preparation.
 
 So I turned the system into a web app.
@@ -78,8 +72,6 @@ goal-assist/
 
 Goal Assist is also an experiment in building a product around a real problem rather than just building another demo.
 
-The current question is simple:
-
 
 ## Feedback
 
@@ -87,6 +79,3 @@ If you try Goal Assist, I'd genuinely like to hear what worked, what didn't, and
 
 **Reach me at [markmitrofanov.de@gmail.com]
 
----
-
-**Goal Assist v0.1** — built to turn *"I need to finish this"* into *"here's what I need to do today."*
