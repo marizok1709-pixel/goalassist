@@ -77,5 +77,5 @@ Goal Assist is also an experiment in building a product around a real problem ra
 
 If you try Goal Assist, I'd genuinely like to hear what worked, what didn't, and where the system broke down.
 
-**Reach me at [markmitrofanov.de@gmail.com]
+Reach me at [markmitrofanov.de@gmail.com]
 
