@@ -26,10 +26,11 @@ Everything here passes before a commit. Nothing is skipped because a change
 "only touched CSS" — the consent-banner defect only touched CSS.
 
 ```bash
-# backend — six suites, throwaway SQLite each, no shared state
+# backend — seven suites, throwaway SQLite each, no shared state
 cd backend
 for t in smoke_test.py smoke_test_material_edit.py smoke_test_hardening.py \
-         smoke_test_privacy.py smoke_test_admin.py smoke_test_availability.py; do
+         smoke_test_privacy.py smoke_test_admin.py smoke_test_availability.py \
+         smoke_test_logging.py; do
   .venv/bin/python $t | tail -1
 done
 
@@ -69,8 +70,14 @@ cd frontend && npm run verify
 `verify/mobile.mjs` (44 checks) locks the phone layout: every route in both
 themes, no horizontal overflow, no control below the tap-target floor, nothing
 permanently covered, plus the consent banner's own state. `verify/loop.mjs`
-(26 checks) walks the product: onboard → plan → tick a task → the counter moves
-→ the calendar agrees → the schedule can still be corrected.
+(31 checks) walks the product: onboard → plan → tick a task → the counter moves
+→ the calendar agrees → **a logged day can be corrected from the calendar** →
+the schedule can still be corrected.
+
+Both servers must be on the ports the suites expect (`3000`/`8000`). If a stale
+dev server holds 3000, Next silently moves to 3001 and the API rejects the CORS
+preflight — which surfaces as an 8-second timeout inside `onboard()` and looks
+exactly like a broken onboarding flow. Check the ports before believing it.
 
 If a suite is ever run against a database you meant to keep, it leaves
 `verify+…@example.com` accounts behind. Delete them — `funnel.py` counts them,
@@ -91,6 +98,26 @@ It only surfaced because the break test was run.
 once. `verify.db` is disposable and gitignored.
 
 ## Gates for the remaining plan items
+
+### Honest day logging · **shipped 2026-08-12, gated**
+
+`backend/smoke_test_logging.py` (41 checks) plus the correction block in
+`verify/loop.mjs`. Found in live use by the owner, so the suite is written
+against what actually happened rather than against the API surface.
+
+What is locked: a reported **0 does not mark a task done** and is stored as a 0
+rather than discarded; a reported zero is distinguishable from an untouched day
+and survives a rebuild instead of being redistributed away; re-logging a day is
+a **correction, not an addition**; un-ticking returns exactly what was logged
+(the old code returned the *planned* amount, which destroyed real progress);
+correcting an **earlier** day re-evaluates today, so missed work reappears
+instead of being skipped; today's own row is still rebuilt from tomorrow so
+toggling it cannot delete or duplicate it; a row ticked before
+`actual_quantity` existed is still reversible; overshoot still cascades.
+
+The load-bearing invariant: **`completed` is derived from the amount, never set
+on its own.** Any future code that assigns `task.completed = True` directly is
+re-introducing this bug.
 
 ### Item 2 — ask the one user why
 

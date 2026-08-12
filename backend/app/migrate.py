@@ -27,6 +27,13 @@ ADDITIONS: dict[str, dict[str, str]] = {
         "note": "VARCHAR(500) NULL",
         "availability_refined": "BOOLEAN NOT NULL DEFAULT FALSE",
     },
+    "scheduled_tasks": {
+        # Deliberately left NULL on existing rows rather than backfilled: NULL
+        # means "logged before this column existed, amount unknown", which the
+        # completion code reads as the full planned quantity. Backfilling would
+        # write that guess into the data as if it were a fact.
+        "actual_quantity": "FLOAT NULL",
+    },
 }
 
 

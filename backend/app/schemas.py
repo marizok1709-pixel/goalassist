@@ -222,6 +222,9 @@ class ScheduledTaskOut(BaseModel):
     quantity: float
     description: str
     completed: bool
+    # None = this day has never been reported on. A number = what was actually
+    # done, including a deliberate 0. Never infer one from `completed`.
+    actual_quantity: float | None = None
     # Filled for today's tasks: the reasoning behind this exact assignment.
     why: str | None = None
 
@@ -231,8 +234,12 @@ class CalendarTaskOut(ScheduledTaskOut):
 
 
 class ScheduledTaskUpdate(BaseModel):
+    # True = reporting on this day, False = putting it back to never-reported.
+    # It is NOT the resulting `completed` flag: whether the day counts as done is
+    # derived from the amount, so reporting 0 reports a day that is not done.
     completed: bool
     # Adaptive completion: the amount actually done, if different from planned.
+    # Absent means "all of it". 0 is a real answer and is stored as one.
     actual_quantity: float | None = Field(default=None, ge=0)
 
 

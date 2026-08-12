@@ -179,34 +179,63 @@ def update_task(
     overshoot = 0.0
     message: str | None = None
     unit = db.get(ProgressUnit, task.progress_unit_id) if task.progress_unit_id else None
+    material = unit.material if unit is not None else None
 
-    if payload.completed and not task.completed:
+    # What this row currently claims to have contributed. A row ticked before
+    # actual_quantity existed carries no amount, and the only honest reading of
+    # it is the full planned quantity.
+    previous = task.actual_quantity
+    if previous is None:
+        previous = task.quantity if task.completed else 0.0
+
+    if payload.completed:
         actual = payload.actual_quantity if payload.actual_quantity is not None else task.quantity
-        if unit is not None and unit.material is not None:
-            # Adaptive completion: overshoot spills into the following units.
-            engine.apply_progress(unit.material, actual, start_unit=unit)
-            overshoot = actual - task.quantity
-            u = unit.unit
-            if overshoot > engine.EPS:
-                message = (
-                    f"Nice — {_fmt_qty(overshoot)} {u} ahead of plan. "
-                    "I've reduced the rest of your week."
-                )
-            elif overshoot < -engine.EPS:
-                message = (
-                    f"Logged {_fmt_qty(actual)} {u}. The remaining "
-                    f"{_fmt_qty(-overshoot)} moved into your future schedule."
-                )
-        task.completed = True
-    elif not payload.completed and task.completed:
-        if unit is not None and unit.material is not None:
-            engine.apply_progress(unit.material, -task.quantity, start_unit=unit)
+        task.actual_quantity = actual
+        # Done means the work is done, not that the day was reported on. A day
+        # logged at zero — or at less than planned — is reported, not finished.
+        task.completed = actual >= task.quantity - engine.EPS
+    else:
+        # Untick: the day goes back to never-reported, so a later rebuild is free
+        # to move it again.
+        actual = 0.0
+        task.actual_quantity = None
         task.completed = False
 
-    # Progress changed → redistribute the future schedule. Today's plan stays
-    # fixed (rebuilding from today would delete/duplicate the task being toggled).
+    # Only the difference is applied, which makes re-logging a day a correction
+    # rather than a second helping.
+    delta = actual - previous
+    if material is not None and abs(delta) > engine.EPS:
+        engine.apply_progress(material, delta, start_unit=unit)
+
+    if payload.completed and unit is not None and material is not None:
+        overshoot = actual - task.quantity
+        u = unit.unit
+        if actual <= engine.EPS:
+            message = (
+                f"Logged nothing done. All {_fmt_qty(task.quantity)} {u} "
+                "go back into the plan."
+            )
+        elif overshoot > engine.EPS:
+            message = (
+                f"Nice — {_fmt_qty(overshoot)} {u} ahead of plan. "
+                "I've reduced the rest of your week."
+            )
+        elif overshoot < -engine.EPS:
+            message = (
+                f"Logged {_fmt_qty(actual)} {u}. The remaining "
+                f"{_fmt_qty(-overshoot)} moved into your future schedule."
+            )
+
+    # Progress changed → redistribute. Editing today's row rebuilds from tomorrow,
+    # because rebuilding from today would delete or duplicate the row being
+    # toggled. Correcting an *earlier* day has to re-evaluate today as well, or
+    # today keeps showing a plan computed from a position that no longer holds —
+    # which is what let a missed day quietly disappear from the schedule.
     today = _today()
-    engine.rebuild_schedule(db, task.goal, today, from_date=today + timedelta(days=1))
+    if task.date >= today:
+        engine.rebuild_schedule(db, task.goal, today, from_date=today + timedelta(days=1))
+    else:
+        engine.rebuild_schedule(db, task.goal, today)
     db.commit()
     db.refresh(task)
     return TaskUpdateOut(

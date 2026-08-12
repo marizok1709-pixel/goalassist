@@ -219,12 +219,21 @@ export default function TodayPage() {
                             Mark &quot;{t.description}&quot; {t.completed ? "not done" : "done"}
                           </span>
                         </label>
-                        <span
-                          className={`min-w-0 flex-1 py-2 text-[15px] sm:py-0 ${
-                            t.completed ? "text-ink-muted line-through" : "text-ink"
-                          }`}
-                        >
-                          {t.description}
+                        <span className="min-w-0 flex-1 py-2 text-[15px] sm:py-0">
+                          <span className={t.completed ? "text-ink-muted line-through" : "text-ink"}>
+                            {t.description}
+                          </span>
+                          {/* A reported day that is not a finished day. Without
+                              this the row is indistinguishable from one nobody
+                              has touched, which is how a logged zero used to
+                              read as "done". */}
+                          {t.actual_quantity !== null && !t.completed && (
+                            <span className="mt-0.5 block text-[11px] text-warn">
+                              logged <span className="tnum">{t.actual_quantity}</span> of{" "}
+                              <span className="tnum">{t.quantity}</span> — the rest is back in your
+                              plan
+                            </span>
+                          )}
                         </span>
                         {!t.completed && (
                           <div className="flex w-full shrink-0 items-center gap-1 border-t border-veil/10 pl-1 sm:w-auto sm:gap-3 sm:border-0 sm:pl-0">

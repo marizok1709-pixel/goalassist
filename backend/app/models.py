@@ -135,10 +135,21 @@ class ScheduledTask(Base):
     quantity: Mapped[float] = mapped_column(Float)
     description: Mapped[str] = mapped_column(String(255))
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # How much was actually done, once the day has been reported on. NULL means
+    # "never touched" — which is a different thing from a reported zero, and the
+    # distinction is the whole point of the column: without it, "I sat down and
+    # did none of it" is unrepresentable and gets stored as done.
+    # `completed` is derived from it (see routers/plan.py), never set alone.
+    actual_quantity: Mapped[float | None] = mapped_column(Float, default=None)
     calendar_event_id: Mapped[str | None] = mapped_column(String(255), default=None)
 
     goal: Mapped[Goal] = relationship(back_populates="scheduled_tasks")
     progress_unit: Mapped[ProgressUnit | None] = relationship()
+
+    @property
+    def logged(self) -> bool:
+        """Has this day been reported on at all? A reported 0 counts."""
+        return self.actual_quantity is not None or self.completed
 
 
 class AnalyticsEvent(Base):

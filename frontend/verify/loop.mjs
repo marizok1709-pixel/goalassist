@@ -179,6 +179,52 @@ try {
   r.check("rest days are labelled rest", cal.rests > 0, JSON.stringify(cal));
   r.check("the calendar grid fits the phone", cal.fits, "calendar overflows 360px");
 
+  // --------------------------------- a logged day can be corrected afterwards
+  //
+  // The 2026-08-12 defect: /today was the only screen in the app that could
+  // reach PATCH /tasks/{id}, and it only ever renders *today*. A day logged
+  // wrong — including a 0 that the old code stored as done — was uncorrectable
+  // from the UI, on any day, forever. The endpoint never had that restriction.
+  const correctable = await page.evaluate(() =>
+    [...document.querySelectorAll("button")].some((b) => /^(log|edit)$/i.test(b.innerText.trim()))
+  );
+  r.check("the calendar day panel can correct a day", correctable, "no log/edit control");
+
+  if (correctable) {
+    await clickText(page, "edit");
+    await page.waitForSelector('input[type="number"]', { timeout: 8000 });
+    // The field is prefilled with the planned amount. Clear it with real key
+    // events — a number input does not reliably select on triple-click, and
+    // assigning .value never reaches React at all.
+    await page.click('input[type="number"]');
+    for (let i = 0; i < 10; i++) await page.keyboard.press("Backspace");
+    await page.type('input[type="number"]', "0");
+    const typed = await page.$eval('input[type="number"]', (el) => el.value);
+    r.check("the log field holds exactly the zero that was typed", typed === "0", typed);
+    await clickText(page, "Log it");
+    await sleep(1200);
+
+    const corrected = await apiGet("/today");
+    const tasks = corrected.missions.flatMap((m) => m.tasks);
+    const zeroed = tasks.filter((t) => t.actual_quantity === 0);
+    r.check(
+      "logging 0 from the calendar reaches the server",
+      zeroed.length === 1,
+      JSON.stringify(tasks)
+    );
+    r.check(
+      "a day logged at 0 is NOT marked done",
+      zeroed.length === 1 && !zeroed[0].completed,
+      JSON.stringify(zeroed)
+    );
+    const panelText = await page.evaluate(() => document.body.innerText);
+    r.check(
+      "the calendar says so in words, not just a cleared tick",
+      /logged\s*0\s*of/i.test(panelText),
+      panelText.slice(0, 400)
+    );
+  }
+
   // ------------------------------- a material can still be corrected later
   await page.goto(`${FRONTEND}/missions/${missionId}`, { waitUntil: "networkidle2" });
   await waitForText(page, typedName);

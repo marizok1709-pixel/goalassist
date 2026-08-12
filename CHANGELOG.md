@@ -4,6 +4,64 @@ All notable changes to Goal Assist, newest first. Dates are yyyy-mm-dd.
 This is a pre-beta product; entries focus on user-visible behaviour and notable
 engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 
+## 2026-08-12 — a logged zero is a real answer
+
+Found by the owner using the product on his own TestDAF and EGE maths missions.
+He reported 0 problems and 0 pages for the previous day. The app marked the
+maths task **done** — strike-through, "1/2 done" — while the engine recorded no
+progress at all, and the German plan carried on from pages nobody had read.
+There was also no way to go back and correct it: refreshing changed nothing
+because every screen was faithfully rendering rows that disagreed.
+
+One defect underneath all three symptoms: **`completed` was a boolean with no
+arithmetic behind it.**
+
+### Fixed
+
+- **Logging 0 no longer marks a task done.** `PATCH /tasks/{id}` set
+  `task.completed = True` unconditionally, so `actual_quantity: 0` applied zero
+  progress and then flipped the row to done anyway. Completion is now *derived*
+  from the amount: report the planned amount and the day is done, report less
+  and it is a reported day that is not finished.
+- **The amount is now stored.** New `scheduled_tasks.actual_quantity` (nullable,
+  additive migration). NULL means "never reported on", which is a different
+  fact from a reported 0 — previously unrepresentable, so the 0 was used to
+  build a message and then thrown away.
+- **Un-ticking returns what was logged, not what was planned.** It used to
+  subtract `task.quantity`: doing 40 of a planned 118, ticking, then un-ticking
+  removed 118 and destroyed real progress. Only the delta between the stored
+  amount and the new one is ever applied, which also makes re-logging a day a
+  correction rather than a second helping.
+- **Correcting an earlier day now re-evaluates today.** Completion rebuilt from
+  tomorrow only, so a missed day silently vanished: yesterday said pages 23-25,
+  today still said 26-27, and the true remaining work only reappeared later in
+  the week. Editing a past day now rebuilds from today; editing today's own row
+  still rebuilds from tomorrow, so it cannot delete or duplicate itself.
+- **Rebuilds no longer eat reported days.** `rebuild_schedule` deleted every
+  incomplete future row; it now keeps any row that was reported on, so a logged
+  zero or a part-done day survives re-planning as history.
+- **Progress corrections unwind from the tail.** The negative branch of
+  `apply_progress` only touched the starting unit, leaving any overshoot that
+  had spilled forward stranded. It now takes work back in the exact inverse
+  order it was applied, keeping a material's progress contiguous — which
+  `build_schedule` relies on when it computes "pages 21-23".
+
+### Added
+
+- **Any day can be corrected from the calendar.** The day-detail panel was
+  display-only: `PATCH /tasks/{id}` never had a date restriction, but `/today`
+  was the only screen in the app that called it, and it only ever renders
+  today. The panel now carries a checkbox and a log/edit control for any date,
+  past included.
+- Days reported below plan say so in words — "logged 0 of 3 — the rest went
+  back into your plan" — on both `/today` and the calendar, so a cleared tick
+  is never the only signal.
+- `backend/smoke_test_logging.py` (41 checks) and 5 new browser checks in
+  `verify/loop.mjs`. See `VERIFICATION.md`.
+- `backend/repair_task.py` — dry-run-by-default repair for rows written while
+  the bug was live, where un-ticking through the API would subtract a quantity
+  the material never received.
+
 ## 2026-08-07 — "Bloom": rose glass replaces both themes
 
 Owner decision this session, and it **reverses** the 2026-07-28 decision that

@@ -102,6 +102,9 @@ export interface ScheduledTask {
   quantity: number;
   description: string;
   completed: boolean;
+  /** null = this day was never reported on. A number = what was actually done,
+   *  including a deliberate 0. Never derive it from `completed`. */
+  actual_quantity: number | null;
   why: string | null;
 }
 

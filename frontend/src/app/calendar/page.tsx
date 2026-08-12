@@ -38,11 +38,54 @@ export default function CalendarPage() {
   const [tasks, setTasks] = useState<CalendarTask[] | null>(null);
   const [selected, setSelected] = useState<string>(iso(now));
 
+  const [busy, setBusy] = useState<number | null>(null);
+  const [logOpen, setLogOpen] = useState<number | null>(null);
+  const [logValue, setLogValue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     const first = view === "week" ? weekStart : new Date(year, month, 1);
     const last = view === "week" ? addDays(weekStart, 6) : new Date(year, month + 1, 0);
     setTasks(await api.calendar(iso(first), iso(last)));
   }, [view, weekStart, year, month]);
+
+  /** Logging anything can move every other task in view — correcting an earlier
+   *  day re-plans from today — so the whole range is refetched, never patched
+   *  in place. */
+  async function commit(task: CalendarTask, body: { completed: boolean; actual_quantity?: number }) {
+    setBusy(task.id);
+    setError(null);
+    try {
+      await api.updateTask(task.id, body);
+      setLogOpen(null);
+      await load();
+    } catch {
+      setError("Could not save that. Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function setDone(task: CalendarTask, completed: boolean) {
+    void commit(task, { completed });
+  }
+
+  function toggleLog(task: CalendarTask) {
+    if (logOpen === task.id) {
+      setLogOpen(null);
+      return;
+    }
+    setLogValue(String(task.actual_quantity ?? task.quantity));
+    setLogOpen(task.id);
+  }
+
+  const logValid =
+    logValue.trim() !== "" && !Number.isNaN(Number(logValue)) && Number(logValue) >= 0;
+
+  function submitLog(task: CalendarTask) {
+    if (!logValid) return;
+    void commit(task, { completed: true, actual_quantity: Number(logValue) });
+  }
 
   useEffect(() => {
     if (!getToken()) {
@@ -170,30 +213,100 @@ export default function CalendarPage() {
             <p className="mt-2 text-sm text-ink-muted">Nothing scheduled — rest day.</p>
           ) : (
             <ul className="mt-3 space-y-2">
-              {selectedTasks.map((t) => (
-                <li key={t.id} className="ob-glass flex items-start gap-2.5 rounded-2xl px-4 py-3 text-sm">
-                  <span
-                    className={`shrink-0 ${
-                      t.completed ? "text-good" : t.date < todayIso ? "text-bad" : "text-ink-muted"
-                    }`}
-                    aria-hidden
-                  >
-                    {t.completed ? "✓" : t.date < todayIso ? "✕" : "○"}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className={t.completed ? "text-ink-muted line-through" : "text-ink"}>
-                      {t.description}
-                    </span>
-                    {/* The mission name wraps under the task on a phone rather
-                        than fighting it for the same line. */}
-                    <span className="mt-0.5 block text-[11px] text-ink-muted sm:mt-0 sm:inline sm:pl-2">
-                      {t.goal_title}
-                    </span>
-                  </span>
-                </li>
-              ))}
+              {selectedTasks.map((t) => {
+                const reported = t.actual_quantity !== null;
+                const missed = !t.completed && !reported && t.date < todayIso;
+                return (
+                  <li key={t.id} className="ob-glass overflow-hidden rounded-2xl text-sm">
+                    <div className="flex items-start gap-2.5 px-2 py-1 sm:px-4 sm:py-2">
+                      {/* Any day is editable, past included — the day you need to
+                          correct is almost always one that has already gone. */}
+                      <label className="grid shrink-0 cursor-pointer place-items-center p-3 sm:-ml-1">
+                        <input
+                          type="checkbox"
+                          checked={t.completed}
+                          disabled={busy === t.id}
+                          onChange={(e) => setDone(t, e.target.checked)}
+                          className="ga-check"
+                        />
+                        <span className="sr-only">
+                          Mark &quot;{t.description}&quot; {t.completed ? "not done" : "done"}
+                        </span>
+                      </label>
+                      <span className="min-w-0 flex-1 py-2.5">
+                        <span className={t.completed ? "text-ink-muted line-through" : "text-ink"}>
+                          {t.description}
+                        </span>
+                        {/* The mission name wraps under the task on a phone rather
+                            than fighting it for the same line. */}
+                        <span className="mt-0.5 block text-[11px] text-ink-muted sm:mt-0 sm:inline sm:pl-2">
+                          {t.goal_title}
+                        </span>
+                        {reported && !t.completed && (
+                          <span className="mt-1 block text-[11px] text-warn">
+                            logged <span className="tnum">{t.actual_quantity}</span> of{" "}
+                            <span className="tnum">{t.quantity}</span> — the rest went back into
+                            your plan
+                          </span>
+                        )}
+                        {missed && (
+                          <span className="mt-1 block text-[11px] text-bad">
+                            missed — never reported
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => toggleLog(t)}
+                        title="Log the amount you actually did"
+                        className={`shrink-0 px-2 py-3.5 text-xs ${
+                          logOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"
+                        }`}
+                      >
+                        {reported ? "edit" : "log"}
+                      </button>
+                    </div>
+                    {logOpen === t.id && (
+                      <div className="border-t border-veil/10 bg-veil/[0.04] px-4 py-3">
+                        <p className="text-[13px] text-ink-2">
+                          Planned: <span className="tnum">{t.quantity}</span>. How much did you
+                          actually do? Zero is a real answer — the work goes back into the plan.
+                        </p>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+                          <input
+                            autoFocus
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            value={logValue}
+                            onChange={(e) => setLogValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") submitLog(t);
+                              if (e.key === "Escape") setLogOpen(null);
+                            }}
+                            className="ob-glass w-28 rounded-xl px-4 py-2 text-center text-sm text-ink tnum"
+                          />
+                          <button
+                            onClick={() => submitLog(t)}
+                            disabled={busy === t.id || !logValid}
+                            className="ob-btn rounded-xl px-5 py-2 text-xs font-semibold disabled:opacity-40"
+                          >
+                            Log it
+                          </button>
+                          <button
+                            onClick={() => setLogOpen(null)}
+                            className="text-xs text-ink-muted hover:text-ink"
+                          >
+                            cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
+          {error && <p className="mt-3 text-sm text-bad">{error}</p>}
         </section>
       </div>
     </DarkShell>

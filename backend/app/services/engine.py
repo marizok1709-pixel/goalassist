@@ -20,7 +20,7 @@ Definitions:
 
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Goal, Material, ProgressUnit, ScheduledTask
@@ -291,19 +291,29 @@ def build_schedule(goal: Goal, from_date: date, availability: dict | None = None
 
 
 def rebuild_start_date(db: Session, goal: Goal, today: date) -> date:
-    """Rebuild from today unless today's plan was already worked on (then tomorrow)."""
+    """Rebuild from today unless today's plan was already reported on (then tomorrow).
+
+    "Reported on" includes a logged zero, not just a completion — someone who
+    opened today and said they did nothing has still spoken about today, and
+    redistributing it out from under them would erase that.
+    """
     worked_today = db.scalar(
         select(ScheduledTask.id).where(
             ScheduledTask.goal_id == goal.id,
             ScheduledTask.date == today,
-            ScheduledTask.completed.is_(True),
+            or_(ScheduledTask.completed.is_(True), ScheduledTask.actual_quantity.is_not(None)),
         )
     )
     return today + timedelta(days=1) if worked_today else today
 
 
 def rebuild_schedule(db: Session, goal: Goal, today: date, from_date: date | None = None) -> None:
-    """Delete the not-yet-done future schedule and redistribute remaining work."""
+    """Delete the unreported future schedule and redistribute remaining work.
+
+    Only rows nobody has spoken about are movable. A completed row is history;
+    so is a row logged at zero or part-done — deleting those would throw away a
+    fact the user reported in order to re-plan around it.
+    """
     if from_date is None:
         from_date = rebuild_start_date(db, goal, today)
     for task in db.scalars(
@@ -311,6 +321,7 @@ def rebuild_schedule(db: Session, goal: Goal, today: date, from_date: date | Non
             ScheduledTask.goal_id == goal.id,
             ScheduledTask.date >= from_date,
             ScheduledTask.completed.is_(False),
+            ScheduledTask.actual_quantity.is_(None),
         )
     ):
         db.delete(task)
@@ -355,7 +366,17 @@ def apply_progress(
             if left <= EPS:
                 break
     else:
-        u = units[idx] if units else None
-        if u is not None:
-            u.completed_quantity = max(u.completed_quantity + left, 0.0)
+        # Unwind from the tail, not from start_unit. Progress across a material's
+        # units is a prefix — build_schedule reads completed_quantity as "how far
+        # in are we" — so removing from the middle would punch a hole the offset
+        # maths then misreads. Taking back the most recently filled work first is
+        # the exact inverse of the forward cascade, including any overshoot that
+        # spilled into later units.
+        remaining = -left
+        for u in reversed(units):
+            take = min(remaining, u.completed_quantity)
+            u.completed_quantity -= take
+            remaining -= take
             u.completed_at = now if u.is_completed else None
+            if remaining <= EPS:
+                break

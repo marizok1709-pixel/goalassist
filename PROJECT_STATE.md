@@ -9,6 +9,38 @@ _Last updated: 2026-08-07. Read this first when resuming work._
 
 ## ▶️ RESUME HERE (next session)
 
+### 2026-08-12 — the logging bug is fixed in the tree, NOT deployed
+
+The owner hit it in live use (detail in `CHANGELOG.md`, gate in
+`VERIFICATION.md`). Root cause: `completed` was a boolean with no arithmetic
+behind it, so logging 0 marked a task done with no progress recorded; un-ticking
+subtracted the *planned* amount and destroyed real progress; and correcting an
+earlier day never re-evaluated today. Any day is now editable from the calendar.
+
+**Two things are outstanding and both need the owner:**
+
+1. **Deploy.** The fix adds `scheduled_tasks.actual_quantity`; the additive
+   migration runs on the API's cold start, so the backend must go out **before**
+   anything reads the column. Frontend after.
+2. **One corrupted production row.** Task **#2149** (user 8
+   `marizok1709@gmail.com`, goal 7 EGE math, 2026-08-11, "Stepik problems:
+   points 88-205") is flagged `completed` while unit 30 still records 87 points
+   — the phantom tick that started all this. Do **not** un-tick it through the
+   UI: the row claims 118 points the material never received, so the reversal
+   would take 118 off a material that only has 87, wiping the declared starting
+   point. Repair it instead, after deploying:
+
+   ```bash
+   cd backend && set -a; . ./.env.local; set +a
+   .venv/bin/python repair_task.py 2149 --actual 0            # dry run
+   .venv/bin/python repair_task.py 2149 --actual 0 --apply
+   ```
+
+   Verified against a local copy of the same data: it writes only `completed`
+   and `actual_quantity` on that row and leaves the material alone.
+
+Everything else in this file below still stands.
+
 **Nothing from the last two sessions is committed.** Branch `onboarding-flow`,
 PR #1 still open against `main`. The working tree holds *both* the onboarding
 rhythm step (item 3) and the whole verification layer. First decision of the
