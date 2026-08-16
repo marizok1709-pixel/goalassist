@@ -9,8 +9,8 @@ is not a gate.
 
 ## The gate as of 2026-08-16
 
-Eleven backend suites, 354 checks, one command each. Two browser suites, 79
-checks, `npm run verify`. Thirteen documentation claims, `verify_claims.py`. All
+Twelve backend suites, 377 checks, one command each. Two browser suites, 79
+checks, `npm run verify`. Fourteen documentation claims, `verify_claims.py`. All
 of it has to be green before anything is committed.
 
 ### The numbers, last measured 2026-08-16
@@ -20,7 +20,7 @@ either a change you meant to make or a regression; there is no third case.
 
 | Metric | Value |
 |---|---|
-| Backend suites / checks | **11 / 354** |
+| Backend suites / checks | **12 / 377** |
 | Browser checks (`npm run verify`) | **97** |
 | Documentation claims (`verify_claims.py`) | **13** |
 | `tsc --noEmit` | silent |
@@ -98,12 +98,12 @@ Everything here passes before a commit. Nothing is skipped because a change
 "only touched CSS" — the consent-banner defect only touched CSS.
 
 ```bash
-# backend — eleven suites, throwaway SQLite each, no shared state
+# backend — twelve suites, throwaway SQLite each, no shared state
 cd backend
 for t in smoke_test.py smoke_test_material_edit.py smoke_test_hardening.py \
          smoke_test_privacy.py smoke_test_admin.py smoke_test_availability.py \
          smoke_test_logging.py smoke_test_replan.py smoke_test_planner.py \
-         smoke_test_feasibility.py smoke_test_golden.py; do
+         smoke_test_feasibility.py smoke_test_golden.py smoke_test_derived.py; do
   .venv/bin/python $t | tail -1
 done
 

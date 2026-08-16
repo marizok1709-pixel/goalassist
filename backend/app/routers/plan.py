@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -357,10 +357,58 @@ def update_task(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Report a day by row id.
+
+    Superseded by `PATCH /goals/{goal_id}/days/{day}`, which names the day
+    instead of a row — a row id only exists because the forward plan is still
+    persisted, and it is the last thing forcing that. Kept working so a deployed
+    client kicks on through the cutover; both call the same function, so the two
+    cannot drift.
+    """
     task = db.get(ScheduledTask, task_id)
     if task is None or task.goal.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+    return _report_day(db, user, task, payload)
 
+
+@router.patch("/goals/{goal_id}/days/{day}", response_model=TaskUpdateOut)
+def update_day(
+    goal_id: int,
+    day: str,
+    payload: ScheduledTaskUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Report one day of one mission, named by the day itself.
+
+    The identity a report actually has: a student says what happened on a date,
+    not what happened to a database row. While the forward plan is still stored
+    this resolves to that row and shares `_report_day` with the endpoint above;
+    when the rows go, only the resolution changes.
+    """
+    from datetime import date as date_cls
+
+    try:
+        target = date_cls.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Day must be YYYY-MM-DD")
+
+    goal = db.get(Goal, goal_id)
+    if goal is None or goal.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mission not found")
+
+    _sync_schedule(db, goal, _today(user))
+    task = db.scalar(
+        select(ScheduledTask)
+        .where(ScheduledTask.goal_id == goal.id, ScheduledTask.date == target)
+        .order_by(ScheduledTask.id)
+    )
+    if task is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Nothing planned for that day")
+    return _report_day(db, user, task, payload)
+
+
+def _report_day(db: Session, user: User, task: ScheduledTask, payload: ScheduledTaskUpdate):
     overshoot = 0.0
     message: str | None = None
     unit = db.get(ProgressUnit, task.progress_unit_id) if task.progress_unit_id else None
@@ -419,15 +467,23 @@ def update_task(
     # today keeps showing a plan computed from a position that no longer holds —
     # which is what let a missed day quietly disappear from the schedule.
     today = _today(user)
+    # Read the row out *before* redistributing. Un-ticking a day that has not
+    # arrived yet puts it back to never-reported, which is exactly the state the
+    # rebuild is entitled to delete — so the row the response describes can stop
+    # existing halfway through this function. It used to be refreshed after the
+    # rebuild and raised `InvalidRequestError`, i.e. a 500 on the calendar's own
+    # "I did not actually do this" control. The answer is the row's last true
+    # state, not a row id that survived.
+    answer = ScheduledTaskOut.model_validate(task)
     if task.date >= today:
         engine.rebuild_schedule(db, task.goal, today, from_date=today + timedelta(days=1))
     else:
         engine.rebuild_schedule(db, task.goal, today)
     db.commit()
-    db.refresh(task)
-    return TaskUpdateOut(
-        task=ScheduledTaskOut.model_validate(task), overshoot=round(overshoot, 2), message=message
-    )
+    if inspect(task).persistent:
+        db.refresh(task)
+        answer = ScheduledTaskOut.model_validate(task)
+    return TaskUpdateOut(task=answer, overshoot=round(overshoot, 2), message=message)
 
 
 @router.get("/goals/{goal_id}/schedule", response_model=list[ScheduledTaskOut])
