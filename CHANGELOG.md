@@ -4,6 +4,49 @@ All notable changes to Goal Assist, newest first. Dates are yyyy-mm-dd.
 This is a pre-beta product; entries focus on user-visible behaviour and notable
 engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 
+## 2026-08-16 — Phase 1 goes live, and two defects only production could find
+
+The pivot reached real users: feasibility before commitment, a projected finish
+date instead of a percentage, and honest day logging. Backend first, then the
+frontend. Two defects shipped with it, both now gated.
+
+### Fixed
+
+- **Every mission became unreadable for logged-in users.** `Enum(GoalPriority)`
+  persists the member *name* (`normal`), but the migration defaulted the new
+  column to the *value* (`NORMAL`), so the cold start stamped all four
+  production goals with a string the ORM refuses to load and every authenticated
+  read threw `LookupError`. `/health` and `/dashboard` stayed green throughout,
+  because neither loads a goal. Rows rewritten, column default reset, and
+  `migrate.py` corrected.
+- **`/missions/new` did not fit an iPhone.** iOS Safari sizes a native
+  `input[type="date"]` to its formatted value and will not shrink below it, so a
+  Russian-locale date ("16 августа 2026 г.") pushed the page ~120px past the
+  viewport; everything but the fixed tab bar sat off-screen and every label was
+  cut in half. Dropping the native appearance lets the declared width win.
+
+### Added
+
+- **`scripts/verify_claims.py`** — 14 checks asserting the *documents* still
+  describe the real code, run as part of the standing gate. It exists because
+  three claims turned out to be false at once: `funnel.py`'s schema-lag
+  resilience, "PR #1 still open", and Phase 1's cutover being finished. Check J
+  covers the migration defect above; the mobile suite gained 18 checks covering
+  the date one.
+- **One plan instead of seven.** `PROJECT_STATE.md` went from 681 lines to the
+  plan alone; the session logs it duplicated now live here. The Obsidian vault
+  symlinks these files rather than copying them, so the two can no longer drift.
+
+### Notes
+
+- Production is confirmed on Neon `eu-central-1`, API pinned to `fra1` — the EU
+  residency question `PRIVACY.md` listed as open.
+- Task #2149 needed no repair: the dry run showed the phantom tick already gone.
+- **Neither defect was reachable by the local suites.** They build their schema
+  with `create_all()` and never run the ALTER TABLE path, and headless Chrome
+  shrinks a date control that Safari does not. 354 backend checks, 79 browser
+  checks and a full gate were green while both were live.
+
 ## 2026-08-15 — the plan is computed, not remembered
 
 Two pieces of work, one root cause between them.

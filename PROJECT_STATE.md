@@ -1,7 +1,7 @@
 # GoalAssist — Project State
 
 _The plan, and only the plan. What happened → `CHANGELOG.md`. How work gets
-proven → `VERIFICATION.md`. Last updated 2026-08-16._
+proven → `VERIFICATION.md`. Last updated 2026-08-17._
 
 **GoalAssist turns academic deadlines into daily certainty.** A student creates a
 mission with a hard deadline and real materials; the system scopes the work in
@@ -16,61 +16,52 @@ AcadAssist, Life.exe — the repo directory is still `acadassist`.)
 2026-08-03: frontend `goalassist.vercel.app`, API `goalassist-api.vercel.app`,
 Neon Postgres in `eu-central-1` with the API pinned to `fra1`.
 
-The pivot's **Phase 1 is committed and pushed** (branch `onboarding-flow`, three
-commits, 2026-08-16) and **not deployed**. Production still runs the pre-pivot
-engine, so three sessions of fixes — honest day logging, scheduler correctness,
-and the whole pivot — have never been in front of a real user.
+The pivot's **Phase 1 is live** — deployed 2026-08-16, backend then frontend.
+Three sessions of work (honest day logging, scheduler correctness, and the whole
+pivot) are now in front of real users for the first time. `main` and
+`onboarding-flow` are in sync and pushed.
 
 **The metric:** _one person who is not Mark completes one mission end to end._
 `backend/funnel.py` is the only thing that reports it. **Not met.**
 
 ## ▶️ Resume here
 
-1. **Deploy — backend first.** The additive migration runs on the API's cold
-   start: `users.timezone`, `goals.{replanned_on, priority,
-   launched_over_capacity, acknowledged_load}`, `materials.minutes_per_unit`,
-   and the `execution_records` table. Frontend second, rebuilt (the API URL is
-   baked in at build time). Post-deploy check in `VERIFICATION.md`.
+The deploy is done. What is left is the work the deploy unblocked.
 
-   The gate was last run green in full on 2026-08-16 (numbers in
-   `VERIFICATION.md`), so this is ready to run as-is:
+1. **Ask the two users why.** Twelve days, zero movement — and they have now
+   never seen the product that tells them the truth *before* they commit. Sima
+   stopped at `registered`, so hers is "what did you see when you signed up?";
+   Vasiliy has a mission and 0/22 ticks, so his is "you opened it, saw the list —
+   what stopped you?" Free, and worth more than anything else on this list.
+2. **Finish the cutover** (below). It is the one part of Phase 1 that did not
+   land, and it is the difference between the forward plan being *derived* and
+   merely being *mitigated*.
+3. **Then the queue.**
 
-   ```bash
-   cd /Users/markmitrofanov/acadassist
+### What the 2026-08-16 deploy cost, and what it taught
 
-   # 1. backend first — nothing may read the new columns before they exist
-   cd backend && vercel deploy --prod --yes && cd ..
+Two defects reached production, neither of which any of the 354 local checks
+could have caught. Both are now gated.
 
-   # 2. frontend second, from the repo root (Root Directory is `frontend`;
-   #    deploying from inside it looks for frontend/frontend and fails)
-   vercel deploy --prod --yes
+- **A migration default the ORM could not read back.** `Enum(GoalPriority)`
+  persists the member *name* (`normal`); `migrate.py` wrote the *value*
+  (`NORMAL`). The cold start stamped all four production goals with a string the
+  ORM refuses to load, so every logged-in read of a mission threw `LookupError`
+  until the rows were rewritten by hand. `/health` and `/dashboard` both stayed
+  green throughout, because neither loads a goal. **The suites build their schema
+  with `create_all()` and never execute the ALTER TABLE path that only production
+  takes** — that is the gap, and check J in `scripts/verify_claims.py` now closes
+  it.
+- **A date field the phone could not fit.** iOS Safari sizes a native
+  `input[type="date"]` to its formatted value and will not shrink below it, so a
+  Russian-locale date pushed `/missions/new` ~120px past the viewport and every
+  label was cut off. Chrome shrinks the identical control, so a 360px sweep and
+  44 mobile checks stayed honestly green. Detail in `VERIFICATION.md`.
 
-   # 3. the one corrupted row, only now — never through the UI
-   cd backend && set -a; . ./.env.local; set +a
-   .venv/bin/python repair_task.py 2149 --actual 0            # dry run first
-   .venv/bin/python repair_task.py 2149 --actual 0 --apply
-
-   # 4. prove it landed (all read-only)
-   curl -s -o /dev/null -w '%{http_code}\n' https://goalassist-api.vercel.app/health   # 200
-   curl -s -o /dev/null -w '%{http_code}\n' https://goalassist-api.vercel.app/dashboard # 401
-   .venv/bin/python funnel.py        # must still report the accounts you expect
-
-   # 5. main should equal production truth
-   cd .. && git checkout main && git merge onboarding-flow && git push
-   ```
-2. **Repair production row #2149** — only after deploying. Task #2149 (user 8,
-   goal 7 EGE math, 2026-08-11) is flagged `completed` while its unit records 87
-   points. **Do not un-tick it through the UI**: the row claims 118 points the
-   material never received, so the reversal would strip 118 from a material that
-   only has 87 and wipe the declared starting point.
-   ```bash
-   cd backend && set -a; . ./.env.local; set +a
-   .venv/bin/python repair_task.py 2149 --actual 0            # dry run
-   .venv/bin/python repair_task.py 2149 --actual 0 --apply
-   ```
-3. **Merge to `main`.** The branch is **15 commits ahead**; `main` has been stale
-   since PR #2 merged on 2026-08-07. Main should equal production truth.
-4. **Ask the two users why.** Eleven days, zero movement.
+**Row #2149 needed no repair.** The dry run showed `completed=False,
+actual_quantity=0.0` — identical before and after — so the phantom tick was
+already gone and nothing was applied. Note the material now reads **106/1497
+points**, not the 87/1400 recorded here earlier.
 
 ### The one part of Phase 1 that is not finished
 
@@ -95,17 +86,17 @@ architecture.
 
 | # | Item | Size | Why it is here |
 |---|---|---|---|
-| 1 | **Deploy Phase 1** | ½ day | Three sessions of fixes no user has seen |
+| 1 | **Ask the two users why** | free | One message each. Vasiliy: "you opened it, saw the list — what stopped you?" Sima never made a mission, so hers is "what did you see when you signed up?" Worth more than any analytics at n=2 |
 | 2 | **Finish the cutover** | ~1 day | Ends the two-engine split above, and actually stops persisting the forward plan |
-| 3 | **Ask the two users why** | free | One message each. Vasiliy: "you opened it, saw the list — what stopped you?" Sima never made a mission, so hers is "what did you see when you signed up?" Worth more than any analytics at n=2 |
-| 4 | **"I fell behind — fix my plan"** | 2–4h | **Much cheaper than first costed**: `components/reality-check.tsx` and the `suggested_deadline` / `suggested_scope` / `suggested_weekly_hours` fields already exist and are wired into both creation paths. This is mounting them on `missions/[id]` over the `PATCH /goals/{id}` that already rebuilds. Today the product's honesty terminates in a dead end whose only exit is quitting |
-| 5 | **Daily email** | ½ day | Cheap, and it buys password reset for free. Expect amplification, not salvation |
-| 6 | **Pivot Phase 2** | — | Material library + `unit_type` enum. Settle the `DAILY_EFFECTIVE_CAP` question below first |
-| 7 | **Pivot Phase 3** | — | Calibration ("we assumed 4.5 min/page; you run 6.2") and mission debrief. **Data-gated, not effort-gated** — it needs `actual_minutes` to accumulate from real use, so it cannot start until item 1 ships and somebody logs time |
+| 3 | **"I fell behind — fix my plan"** | 2–4h | **Much cheaper than first costed**: `components/reality-check.tsx` and the `suggested_deadline` / `suggested_scope` / `suggested_weekly_hours` fields already exist and are wired into both creation paths. This is mounting them on `missions/[id]` over the `PATCH /goals/{id}` that already rebuilds. Today the product's honesty terminates in a dead end whose only exit is quitting |
+| 4 | **Daily email** | ½ day | Cheap, and it buys password reset for free. Expect amplification, not salvation |
+| 5 | **Pivot Phase 2** | — | Material library + `unit_type` enum. Settle the `DAILY_EFFECTIVE_CAP` question below first |
+| 6 | **Pivot Phase 3** | — | Calibration ("we assumed 4.5 min/page; you run 6.2") and mission debrief. **Data-gated, not effort-gated** — `actual_minutes` has to accumulate from real use first, and as of now nobody has logged a single day |
 
 **Retired as done:** mobile layout pass (08-06, locked by `verify/mobile.mjs`) ·
 availability back in the flow (08-07) · timezone as a stored IANA string (pivot
-Part 0b) · honest day logging (08-12) · scheduler correctness (08-15).
+Part 0b) · honest day logging (08-12) · scheduler correctness (08-15) ·
+**deploying Phase 1 (08-16)**.
 
 ## Decisions in force
 
