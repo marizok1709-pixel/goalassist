@@ -344,6 +344,58 @@ def check_frontend() -> None:
     )
 
 
+# ------------------------------------------------- J: migration vs the ORM
+def check_migration_defaults() -> None:
+    """Every enum-ish default in migrate.py must be a form the ORM can read back.
+
+    `Enum(GoalPriority)` persists the member *name* (`normal`), not its value
+    (`NORMAL`). `migrate.py` wrote the value, so on 2026-08-16 every production
+    mission became unloadable — `LookupError: 'NORMAL' is not among the defined
+    enum values` — while all 354 local checks stayed green, because the suites
+    build their schema with `create_all()` and never execute the ALTER TABLE
+    path that only production takes.
+    """
+    sys.path.insert(0, str(BACKEND))
+    try:
+        from app import migrate as migrate_mod  # noqa: PLC0415
+        from app import models as models_mod  # noqa: PLC0415
+    except Exception as exc:  # pragma: no cover
+        check("J", "migration defaults are values the ORM can read back", False, str(exc))
+        return
+
+    import enum as _enum  # noqa: PLC0415
+
+    # Every name any of the app's enums would persist.
+    valid = {
+        m.name
+        for obj in vars(models_mod).values()
+        if isinstance(obj, type) and issubclass(obj, _enum.Enum)
+        for m in obj
+    }
+    spec = getattr(migrate_mod, "ADDITIONS", None)
+    if not spec:
+        # Guessing the attribute name made this check pass against an empty
+        # dict — green while the bug it exists for was sitting in the file.
+        check("J", "migration defaults are in the form the ORM persists", False,
+              "migrate.ADDITIONS not found — check is not reading the spec")
+        return
+
+    offences = []
+    for table, cols in (spec or {}).items():
+        for col, ddl in cols.items():
+            m = re.search(r"DEFAULT\s+'([^']+)'", str(ddl))
+            if not m:
+                continue
+            literal = m.group(1)
+            # Only judge literals that look like an enum member of some casing.
+            if literal.lower() in {v.lower() for v in valid} and literal not in valid:
+                offences.append(f"{table}.{col} defaults to {literal!r}, ORM persists {literal.lower()!r}")
+    check(
+        "J", "migration defaults are in the form the ORM persists",
+        not offences, "; ".join(offences) if offences else "all enum defaults use member names",
+    )
+
+
 def main() -> int:
     check_suites()
     check_routes()
@@ -351,6 +403,7 @@ def main() -> int:
     check_vault()
     check_memory()
     check_funnel()
+    check_migration_defaults()
     check_frontend()
 
     width = max(len(n) for _, n, _, _ in results)

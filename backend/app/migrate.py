@@ -34,9 +34,16 @@ ADDITIONS: dict[str, dict[str, str]] = {
         # NULL means "never replanned", which reads as due — the first read of
         # the day catches the mission up whether or not it has one of these.
         "replanned_on": "DATE NULL",
-        # Existing missions are NORMAL: nobody has told us otherwise, and the
+        # Existing missions are normal: nobody has told us otherwise, and the
         # value only affects how the pool is shared.
-        "priority": "VARCHAR(10) NOT NULL DEFAULT 'NORMAL'",
+        #
+        # The literal is the enum *member name* (`normal`), not its value
+        # (`NORMAL`). SQLAlchemy's `Enum(GoalPriority)` persists the name, so a
+        # default written as the value is a row the ORM cannot load back: this
+        # shipped to production on 2026-08-16 and every mission became
+        # unreadable until the column was rewritten by hand. Locked by check J
+        # in `scripts/verify_claims.py`.
+        "priority": "VARCHAR(10) NOT NULL DEFAULT 'normal'",
         "launched_over_capacity": "BOOLEAN NOT NULL DEFAULT FALSE",
         "acknowledged_load": "FLOAT NULL",
     },
