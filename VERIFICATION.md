@@ -21,7 +21,7 @@ either a change you meant to make or a regression; there is no third case.
 | Metric | Value |
 |---|---|
 | Backend suites / checks | **11 / 354** |
-| Browser checks (`npm run verify`) | **79** |
+| Browser checks (`npm run verify`) | **97** |
 | Documentation claims (`verify_claims.py`) | **13** |
 | `tsc --noEmit` | silent |
 | Lint | **4** errors, all `react-hooks/set-state-in-effect` |
@@ -326,6 +326,18 @@ had to be deleted by hand on 2026-08-03.
 
 ## Known gaps, deliberately not gated
 
+- **iOS Safari's native date control cannot be reproduced in headless Chrome.**
+  Safari sizes `input[type="date"]` to its *formatted value* and refuses to
+  shrink below it, so on a Russian locale ("16 августа 2026 г.") the field
+  pushed `/missions/new` about 120px past the viewport and everything except the
+  fixed tab bar sat off-screen to the left. Chrome shrinks the identical control
+  to 324px — measured against production — which is why a 360px sweep, 44 mobile
+  checks and an overflow check that reads the real scroll container all stayed
+  green while a real user could not read the form. The fix drops the native
+  appearance; the suite now asserts **the fix is present** (computed
+  `appearance: none` on every date input, 18 checks) rather than the symptom
+  being absent, because the symptom is invisible to this browser. Confirmed the
+  assertion is not vacuous: with the rule removed the computed value is `auto`.
 - **The Gboard word-reversal cannot be reproduced without a physical Android
   device.** Synthetic CDP IME events do not model Gboard's cached cursor state.
   What is automated is that the defective composited `filter` is gone and that

@@ -601,6 +601,28 @@ html[data-theme="dark"] .ob-btn {
   }
 }
 
+/* iOS Safari sizes a *native* date control to its formatted value and refuses
+   to shrink below it, so `w-full` loses: on a Russian locale the value renders
+   as "16 августа 2026 г." and the field pushed the whole page ~120px wider than
+   the phone. Everything except the fixed tab bar then sat off-screen to the
+   left. Chrome shrinks the same control to 324px, which is why 44 mobile checks
+   and a 360px sweep all stayed green — see "Known gaps" in VERIFICATION.md.
+   Dropping the native appearance lets the declared width win. */
+.ob-date {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Belt and braces: no form control may widen its container, whatever a given
+   engine thinks its intrinsic size should be. */
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
 .ob-date::-webkit-calendar-picker-indicator {
   opacity: 0.6;
   cursor: pointer;

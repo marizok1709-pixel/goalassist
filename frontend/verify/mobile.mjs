@@ -220,6 +220,24 @@ try {
         bad.length === 0,
         bad.join(" | ")
       );
+
+      // iOS-only defect, asserted structurally because this browser cannot
+      // reproduce it. Safari sizes a native date control to its formatted
+      // value and will not shrink below it, so on a Russian locale the field
+      // pushed `/missions/new` ~120px past the viewport while every check here
+      // stayed green. Dropping the native appearance is the fix; this asserts
+      // the fix is still present rather than the symptom being absent.
+      const dates = await page.evaluate(() =>
+        [...document.querySelectorAll('input[type="date"]')].map((el) => {
+          const cs = getComputedStyle(el);
+          return (cs.webkitAppearance || cs.appearance) === "none";
+        })
+      );
+      r.check(
+        `${theme} ${route} — date inputs cannot outgrow the phone`,
+        dates.every(Boolean),
+        `${dates.filter((d) => !d).length} of ${dates.length} still render natively`
+      );
     }
     await page.close();
   }
