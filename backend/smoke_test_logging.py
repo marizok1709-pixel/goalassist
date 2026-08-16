@@ -27,7 +27,7 @@ if os.path.exists("smoke_logging.db"):
     os.remove("smoke_logging.db")
 
 import app.database as database
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 database.engine = create_engine(
@@ -91,11 +91,36 @@ def material_state(headers, gid):
     return m["completed"], m["remaining"]
 
 
-def backdate(task_id: int, to: date) -> None:
-    """Move a row into the past. The engine only ever schedules forward, so a
-    yesterday is otherwise unreachable through the API."""
+def backdate(task: dict, to: date) -> None:
+    """Move a day into the past. The engine only ever schedules forward, so a
+    yesterday is otherwise unreachable through the API.
+
+    Resolved by (mission, date) rather than by row id: only days that have
+    arrived have rows now, and a day still ahead is computed, so an id is not
+    something a caller can rely on having.
+    """
     db = database.SessionLocal()
-    db.get(ScheduledTask, task_id).date = to
+    when = date.fromisoformat(task["date"])
+    row = db.scalar(
+        select(ScheduledTask).where(
+            ScheduledTask.goal_id == task["goal_id"], ScheduledTask.date == when
+        )
+    )
+    if row is None:
+        # Only days that have arrived are stored. To put a day still ahead into
+        # the past, materialise it first — which is what happens naturally when
+        # that day arrives, just brought forward so the test need not wait.
+        row = ScheduledTask(
+            goal_id=task["goal_id"],
+            material_id=task["material_id"],
+            progress_unit_id=task["progress_unit_id"],
+            date=when,
+            quantity=task["quantity"],
+            description=task["description"],
+            completed=False,
+        )
+        db.add(row)
+    row.date = to
     db.commit()
     db.close()
 
@@ -123,7 +148,7 @@ first = schedule(H, gid)[0]
 check("day one is scheduled", first["quantity"] > 0, first)
 check("day one starts at the beginning", "1-" in first["description"], first["description"])
 
-r = client.patch(f"/tasks/{first['id']}", headers=H, json={"completed": True, "actual_quantity": 0})
+r = client.patch(f"/goals/{first['goal_id']}/days/{first['date']}", headers=H, json={"completed": True, "actual_quantity": 0})
 check("logging zero is accepted", r.status_code == 200, r.status_code)
 body = r.json()
 check("logging zero does NOT mark the task done", body["task"]["completed"] is False, body["task"])
@@ -152,13 +177,13 @@ check(
 # --------------------------------------------------------------------------
 # 3. Re-logging the same day is a correction, not a second helping
 # --------------------------------------------------------------------------
-client.patch(f"/tasks/{first['id']}", headers=H, json={"completed": True, "actual_quantity": 5})
+client.patch(f"/goals/{first['goal_id']}/days/{first['date']}", headers=H, json={"completed": True, "actual_quantity": 5})
 done, _ = material_state(H, gid)
 check("correcting 0 → 5 records 5", done == 5, done)
-client.patch(f"/tasks/{first['id']}", headers=H, json={"completed": True, "actual_quantity": 2})
+client.patch(f"/goals/{first['goal_id']}/days/{first['date']}", headers=H, json={"completed": True, "actual_quantity": 2})
 done, _ = material_state(H, gid)
 check("correcting 5 → 2 records 2, not 7", done == 2, done)
-client.patch(f"/tasks/{first['id']}", headers=H, json={"completed": True, "actual_quantity": 5})
+client.patch(f"/goals/{first['goal_id']}/days/{first['date']}", headers=H, json={"completed": True, "actual_quantity": 5})
 done, _ = material_state(H, gid)
 check("correcting 2 → 5 records 5, not 7", done == 5, done)
 
@@ -169,7 +194,7 @@ check("correcting 2 → 5 records 5, not 7", done == 5, done)
 # then un-ticking used to remove 3, stranding 2 points of phantom progress;
 # logging 2 of a planned 3 and un-ticking removed 3, destroying real work.
 # --------------------------------------------------------------------------
-r = client.patch(f"/tasks/{first['id']}", headers=H, json={"completed": False})
+r = client.patch(f"/goals/{first['goal_id']}/days/{first['date']}", headers=H, json={"completed": False})
 done, _ = material_state(H, gid)
 check("un-ticking a 5-logged task removes exactly 5", done == 0, done)
 check("un-ticked row reports no amount", r.json()["task"]["actual_quantity"] is None, r.json())
@@ -179,10 +204,10 @@ H2 = register("undertick@example.com")
 gid2 = make_mission(H2)
 t2 = schedule(H2, gid2)[0]
 planned = t2["quantity"]
-client.patch(f"/tasks/{t2['id']}", headers=H2, json={"completed": True, "actual_quantity": 1})
+client.patch(f"/goals/{t2['goal_id']}/days/{t2['date']}", headers=H2, json={"completed": True, "actual_quantity": 1})
 done, _ = material_state(H2, gid2)
 check("logging 1 of a planned 3 records 1", done == 1, f"{done} (planned {planned})")
-client.patch(f"/tasks/{t2['id']}", headers=H2, json={"completed": False})
+client.patch(f"/goals/{t2['goal_id']}/days/{t2['date']}", headers=H2, json={"completed": False})
 done, _ = material_state(H2, gid2)
 check("un-ticking it removes 1, not the planned 3", done == 0, done)
 
@@ -192,11 +217,11 @@ check("un-ticking it removes 1, not the planned 3", done == 0, done)
 H3 = register("partial@example.com")
 gid3 = make_mission(H3)
 t3 = schedule(H3, gid3)[0]
-r = client.patch(f"/tasks/{t3['id']}", headers=H3, json={"completed": True, "actual_quantity": 1})
+r = client.patch(f"/goals/{t3['goal_id']}/days/{t3['date']}", headers=H3, json={"completed": True, "actual_quantity": 1})
 check("under-logging does not mark done", r.json()["task"]["completed"] is False, r.json()["task"])
 check("under-logging stores the amount", r.json()["task"]["actual_quantity"] == 1, r.json()["task"])
 r = client.patch(
-    f"/tasks/{t3['id']}", headers=H3, json={"completed": True, "actual_quantity": t3["quantity"]}
+    f"/goals/{t3['goal_id']}/days/{t3['date']}", headers=H3, json={"completed": True, "actual_quantity": t3["quantity"]}
 )
 check("logging the full amount does mark done", r.json()["task"]["completed"] is True, r.json())
 
@@ -207,7 +232,7 @@ H4 = register("over@example.com")
 gid4 = make_mission(H4)
 t4 = schedule(H4, gid4)[0]
 r = client.patch(
-    f"/tasks/{t4['id']}", headers=H4, json={"completed": True, "actual_quantity": t4["quantity"] + 4}
+    f"/goals/{t4['goal_id']}/days/{t4['date']}", headers=H4, json={"completed": True, "actual_quantity": t4["quantity"] + 4}
 )
 check("overshoot marks the task done", r.json()["task"]["completed"] is True, r.json()["task"])
 check("overshoot is reported", abs(r.json()["overshoot"] - 4) < 0.01, r.json()["overshoot"])
@@ -227,8 +252,8 @@ sched = schedule(H5, gid5)
 day1, day2 = sched[0], sched[1]
 check("day two originally follows on from day one", "4-" in day2["description"], day2["description"])
 
-backdate(day1["id"], YESTERDAY)
-r = client.patch(f"/tasks/{day1['id']}", headers=H5, json={"completed": True, "actual_quantity": 0})
+backdate(day1, YESTERDAY)
+r = client.patch(f"/goals/{day1['goal_id']}/days/{YESTERDAY.isoformat()}", headers=H5, json={"completed": True, "actual_quantity": 0})
 check("a past day can be logged at all", r.status_code == 200, r.status_code)
 
 after = schedule(H5, gid5)
@@ -250,7 +275,7 @@ check("the past row is not marked done", get_task(day1["id"])["completed"] is Fa
 # --------------------------------------------------------------------------
 # 8. Correcting an earlier day upward also re-evaluates today
 # --------------------------------------------------------------------------
-r = client.patch(f"/tasks/{day1['id']}", headers=H5, json={"completed": True, "actual_quantity": 6})
+r = client.patch(f"/goals/{day1['goal_id']}/days/{YESTERDAY.isoformat()}", headers=H5, json={"completed": True, "actual_quantity": 6})
 done, _ = material_state(H5, gid5)
 check("the correction is recorded", done == 6, done)
 after = schedule(H5, gid5)
@@ -271,7 +296,7 @@ check(
 H6 = register("todayrow@example.com")
 gid6 = make_mission(H6)
 t6 = schedule(H6, gid6)[0]
-client.patch(f"/tasks/{t6['id']}", headers=H6, json={"completed": True, "actual_quantity": 1})
+client.patch(f"/goals/{t6['goal_id']}/days/{t6['date']}", headers=H6, json={"completed": True, "actual_quantity": 1})
 rows = [t for t in schedule(H6, gid6) if t["date"] == TODAY.isoformat()]
 check("today's toggled row is not duplicated", len(rows) == 1, rows)
 check("today's toggled row survives its own rebuild", rows[0]["id"] == t6["id"], rows)
@@ -285,13 +310,13 @@ check("today's toggled row survives its own rebuild", rows[0]["id"] == t6["id"],
 H7 = register("legacy@example.com")
 gid7 = make_mission(H7, already=4.0)
 t7 = schedule(H7, gid7)[0]
-client.patch(f"/tasks/{t7['id']}", headers=H7, json={"completed": True})
+client.patch(f"/goals/{t7['goal_id']}/days/{t7['date']}", headers=H7, json={"completed": True})
 db = database.SessionLocal()
 db.get(ScheduledTask, t7["id"]).actual_quantity = None  # forge a pre-migration row
 db.commit()
 db.close()
 before, _ = material_state(H7, gid7)
-r = client.patch(f"/tasks/{t7['id']}", headers=H7, json={"completed": False})
+r = client.patch(f"/goals/{t7['goal_id']}/days/{t7['date']}", headers=H7, json={"completed": False})
 check("un-ticking a legacy row succeeds", r.status_code == 200, r.status_code)
 after_done, _ = material_state(H7, gid7)
 check(
@@ -315,7 +340,7 @@ gid8 = make_mission(H8, already=2.0)
 sched8 = schedule(H8, gid8)
 day1_8 = sched8[0]
 check("a future day names its pages", "-" in day1_8["description"], day1_8["description"])
-backdate(day1_8["id"], YESTERDAY)
+backdate(day1_8, YESTERDAY)
 
 # Move the position out from under the past row, exactly as the "I'm on page N"
 # editor does — this is what made the label stale in production.
@@ -350,8 +375,8 @@ check(
 H9 = register("realhistory@example.com")
 gid9 = make_mission(H9)
 d9 = schedule(H9, gid9)[0]
-client.patch(f"/tasks/{d9['id']}", headers=H9, json={"completed": True})
-backdate(d9["id"], YESTERDAY)
+client.patch(f"/goals/{d9['goal_id']}/days/{d9['date']}", headers=H9, json={"completed": True})
+backdate(d9, YESTERDAY)
 cal9 = client.get(
     "/calendar",
     headers=H9,
@@ -368,7 +393,7 @@ check(
 H10 = register("wholeunit@example.com")
 gid10 = make_mission(H10, total=3, days=9, unit="mock exams")
 exam = schedule(H10, gid10)[0]
-backdate(exam["id"], YESTERDAY)
+backdate(exam, YESTERDAY)
 cal10 = client.get(
     "/calendar",
     headers=H10,

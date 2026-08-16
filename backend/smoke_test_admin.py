@@ -140,6 +140,10 @@ client.post(
     headers=ADMIN,
 )
 
+# Open the app first. Only days that have arrived are written down, so a
+# student who has never looked has nothing stored yet — which is correct, and
+# means the roster's totals describe real days rather than an imagined plan.
+client.get("/today", headers=ADMIN)
 roster = client.get("/admin/users", headers=ADMIN).json()
 check("roster returns every user", len(roster) == 3, len(roster))
 me_row = next((r for r in roster if r["email"] == "admin@example.com"), None)
@@ -153,7 +157,7 @@ check("activity is 0 before any work", me_row["tasks_completed"] == 0 and me_row
 # activity signal: complete a task and confirm it registers
 sched = client.get(f"/goals/{gid_for_admin}/schedule", headers=ADMIN).json()
 if sched:
-    client.patch(f"/tasks/{sched[0]['id']}", json={"completed": True}, headers=ADMIN)
+    client.patch(f"/goals/{sched[0]['goal_id']}/days/{sched[0]['date']}", json={"completed": True}, headers=ADMIN)
 roster = client.get("/admin/users", headers=ADMIN).json()
 me_row = next(r for r in roster if r["email"] == "admin@example.com")
 check("completing a task registers activity", me_row["tasks_completed"] >= 1, me_row)

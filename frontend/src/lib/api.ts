@@ -151,7 +151,10 @@ export interface Plan {
 }
 
 export interface ScheduledTask {
-  id: number;
+  /** Present only while a day still has a stored row behind it. A day of work is
+   *  identified by its mission and its date — never by this. Reporting goes
+   *  through `updateDay`, which needs neither. */
+  id?: number | null;
   goal_id: number;
   progress_unit_id: number | null;
   material_id: number | null;
@@ -495,13 +498,21 @@ export const api = {
   calendar: (start: string, end: string) =>
     request<CalendarTask[]>(`/calendar?start=${start}&end=${end}`),
 
-  updateTask: (
-    taskId: number,
+  /** Report one day of one mission, named by the day itself.
+   *
+   *  Replaces `updateTask(taskId, …)`. A row id only existed because the
+   *  forward plan was written to the database; the plan is computed now, so
+   *  there is no row to name — and a student reports what happened on a date,
+   *  which is the identity this always had.
+   */
+  updateDay: (
+    goalId: number,
+    day: string,
     // actual_minutes is the only measurement of real pace the product takes.
     data: { completed: boolean; actual_quantity?: number; actual_minutes?: number }
   ) =>
     request<{ task: ScheduledTask; overshoot: number; message: string | null }>(
-      `/tasks/${taskId}`,
+      `/goals/${goalId}/days/${day}`,
       { method: "PATCH", body: JSON.stringify(data) }
     ),
 

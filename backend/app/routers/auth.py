@@ -61,12 +61,10 @@ def update_me(
         data["timezone"] = None
     for field, value in data.items():
         setattr(user, field, value)
-    if "availability" in data:
-        # New weekly rhythm → every active mission's future schedule changes.
-        today = clock.today_for(user)
-        for goal in user.goals:
-            if goal.status == GoalStatus.active:
-                engine.rebuild_schedule(db, goal, today)
+    # A new weekly rhythm changes every active mission's future schedule, and
+    # used to trigger a rebuild of each one. Nothing to rebuild now: the plan is
+    # computed from the mission's live position — including this availability —
+    # every time anybody reads it.
     db.commit()
     db.refresh(user)
     return user

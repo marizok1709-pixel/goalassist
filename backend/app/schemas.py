@@ -339,7 +339,11 @@ class PlanOut(BaseModel):
 class ScheduledTaskOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    # None for a day that is still ahead. The forward plan is computed on every
+    # read and never written down, so an upcoming day has no row and therefore
+    # no id. Days that have been reported on keep theirs, because those are
+    # history. Nothing may identify a day by this — use (goal_id, date).
+    id: int | None = None
     goal_id: int
     progress_unit_id: int | None
     material_id: int | None

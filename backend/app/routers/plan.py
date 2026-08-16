@@ -41,25 +41,79 @@ def _today(user: User | None = None):
 
 
 def _sync_schedule(db: Session, goal: Goal, today) -> None:
-    """Bring a mission's schedule up to date with the calendar before reading it.
+    """Deliberately does nothing.
 
-    Two cases. A goal with materials and no schedule gets one built. A goal that
-    has let a day go by unreported gets caught up — that day's work is still
-    owed, and until the plan absorbs it every row after it is quoting a position
-    the mission never reached.
+    It used to build or catch up a mission's stored schedule before reading it —
+    a write on a read path, gated to once a day by `goal.replanned_on` so that a
+    day passing unreported would re-plan. None of that is needed once the
+    forward plan is derived: every read computes from the mission's live
+    position, so a day that goes by is absorbed by definition rather than by a
+    scheduled repair.
 
-    This is a write on a read path, which is why it is gated to once per day per
-    mission by `goal.replanned_on` rather than run on every request.
+    Kept as a no-op for one release so the call sites can retire in their own
+    change rather than in this one.
+    """
+    return
+
+
+def _materialise_today(db: Session, goal: Goal, today) -> None:
+    """Write down today's work, once, on the day it becomes today.
+
+    The forward plan is never stored — that is the whole cutover. But the *past*
+    must be, and a day only becomes the past by first being today. Without this
+    a day that goes by unreported leaves no trace at all: the calendar would
+    show a clean run of green behind a student who did nothing, because a plan
+    computed forward from today cannot reconstruct what yesterday was asked to
+    do. Missed days are honest history, and this is where they come from.
+
+    "A row is materialised when its day arrives, or when it is reported on.
+    Never ahead." Nothing here ever writes a date greater than today.
     """
     if not goal.materials:
         return
-    has_any = db.scalar(select(ScheduledTask.id).where(ScheduledTask.goal_id == goal.id))
-    if has_any is None:
-        engine.rebuild_schedule(db, goal, today)
-        db.commit()
-    elif engine.needs_replan(db, goal, today):
-        engine.rebuild_schedule(db, goal, today)
-        db.commit()
+    stored = list(
+        db.scalars(
+            select(ScheduledTask).where(
+                ScheduledTask.goal_id == goal.id, ScheduledTask.date == today
+            )
+        )
+    )
+    # Today is not history yet. While nobody has reported on it, it is still a
+    # claim about work that has not happened, so it has to keep moving with the
+    # mission's position — a row written this morning and left alone is stale by
+    # this afternoon, which is the whole defect in miniature. Once the day is
+    # reported on it becomes a fact and is never touched again.
+    if stored and any(t.actual_quantity is not None or t.completed for t in stored):
+        return
+    fresh = [t for t in engine.derive_schedule(db, goal, today) if t.date == today]
+    for old in stored:
+        db.delete(old)
+    db.flush()
+    for t in fresh:
+        db.add(t)
+    db.commit()
+
+
+def _days_for(db: Session, goal: Goal, today) -> list[ScheduledTask]:
+    """Every day of this mission: stored history, then the derived future.
+
+    Two sources, one rule — a day that has arrived is a fact and comes from the
+    database; a day still ahead is a computation and comes from the planner.
+    They cannot overlap: everything stored is dated today or earlier, and the
+    derived side starts tomorrow.
+    """
+    _materialise_today(db, goal, today)
+    stored = list(
+        db.scalars(
+            select(ScheduledTask)
+            .where(ScheduledTask.goal_id == goal.id, ScheduledTask.date <= today)
+            .order_by(ScheduledTask.date, ScheduledTask.id)
+        )
+    )
+    # Legacy rows dated ahead of today were written before the cutover and are
+    # not history — the derived plan is the truth for those days.
+    ahead = [t for t in engine.derive_schedule(db, goal, today) if t.date > today]
+    return stored + ahead
 
 
 def _enrich(report, goal: Goal, portfolio, today):
@@ -111,13 +165,7 @@ def _upcoming(db: Session, goal: Goal, today) -> list[ScheduledTask]:
     slice a given screen is showing — a range is only correct relative to what
     comes before it.
     """
-    return list(
-        db.scalars(
-            select(ScheduledTask)
-            .where(ScheduledTask.goal_id == goal.id, ScheduledTask.date >= today)
-            .order_by(ScheduledTask.date, ScheduledTask.id)
-        )
-    )
+    return [t for t in _days_for(db, goal, today) if t.date >= today]
 
 
 @router.get("/goals/{goal_id}/plan", response_model=PlanOut)
@@ -146,11 +194,7 @@ def _today_payload(db: Session, user: User) -> TodayOut:
     # that exist.
     portfolio = adapter.plan_for(db, user, today)
     for g in goals:
-        tasks = db.scalars(
-            select(ScheduledTask)
-            .where(ScheduledTask.goal_id == g.id, ScheduledTask.date == today)
-            .order_by(ScheduledTask.id)
-        ).all()
+        tasks = [t for t in _days_for(db, g, today) if t.date == today]
         r = _enrich(engine.build_reality_report(g, today), g, portfolio, today)
         plans = {p.material_id: p for p in engine.build_material_plans(g, today)}
         ranges = engine.derive_descriptions(g, _upcoming(db, g, today), today)
@@ -219,17 +263,23 @@ def calendar_view(
     for g in goals:
         _sync_schedule(db, g, today)
         ranges.update(engine.derive_descriptions(g, _upcoming(db, g, today), today))
-    tasks = db.scalars(
-        select(ScheduledTask)
-        .join(Goal, ScheduledTask.goal_id == Goal.id)
-        .where(Goal.user_id == user.id, ScheduledTask.date >= start_d, ScheduledTask.date <= end_d)
-        .order_by(ScheduledTask.date, ScheduledTask.id)
-    ).all()
+    tasks = sorted(
+        (
+            t
+            for g in goals
+            for t in _days_for(db, g, today)
+            if start_d <= t.date <= end_d
+        ),
+        key=lambda t: (t.date, t.goal_id, t.material_id or 0),
+    )
+    # A derived day has no `goal` relationship to walk — it was never attached
+    # to the session — so take the title from the missions already in hand.
+    titles = {g.id: g.title for g in goals}
     out = []
     for t in tasks:
         row = ScheduledTaskOut.model_validate(t).model_dump()
         row["description"] = _display(db, t, ranges)
-        out.append(CalendarTaskOut(**row, goal_title=t.goal.title))
+        out.append(CalendarTaskOut(**row, goal_title=titles.get(t.goal_id, "")))
     return out
 
 
@@ -262,6 +312,14 @@ def _display(db: Session, task: ScheduledTask, ranges: dict[int, str]) -> str:
     stored `description` is what let /today keep claiming "pages 24-26" while the
     calendar had already moved on.
     """
+    if task.id is None:
+        # A derived day. Its description was computed from the mission's live
+        # position moments ago by the same cursor walk `derive_descriptions`
+        # performs, so it is already the truth — and it has no id to look up.
+        # Keying the overrides by id and calling `.get(None)` collapsed every
+        # upcoming row onto one entry, so the whole schedule rendered the last
+        # description in the map.
+        return task.description
     return ranges.get(task.id) or _settled_description(db, task)
 
 
@@ -350,26 +408,12 @@ def _record_day(db: Session, task: ScheduledTask, payload, actual: float) -> Non
         db.add(record)
 
 
-@router.patch("/tasks/{task_id}", response_model=TaskUpdateOut)
-def update_task(
-    task_id: int,
-    payload: ScheduledTaskUpdate,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Report a day by row id.
-
-    Superseded by `PATCH /goals/{goal_id}/days/{day}`, which names the day
-    instead of a row — a row id only exists because the forward plan is still
-    persisted, and it is the last thing forcing that. Kept working so a deployed
-    client kicks on through the cutover; both call the same function, so the two
-    cannot drift.
-    """
-    task = db.get(ScheduledTask, task_id)
-    if task is None or task.goal.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
-    return _report_day(db, user, task, payload)
-
+# `PATCH /tasks/{task_id}` used to live here. A day was named by the id of the
+# row that stored it — which only worked because the forward plan was written to
+# the database, the very thing that let a stale plan be served on a later day
+# than it was built. The plan is computed now, so an upcoming day has no row and
+# no id to name it by. Reporting goes through the endpoint below, which names
+# the day itself.
 
 @router.patch("/goals/{goal_id}/days/{day}", response_model=TaskUpdateOut)
 def update_day(
@@ -397,12 +441,10 @@ def update_day(
     if goal is None or goal.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mission not found")
 
-    _sync_schedule(db, goal, _today(user))
-    task = db.scalar(
-        select(ScheduledTask)
-        .where(ScheduledTask.goal_id == goal.id, ScheduledTask.date == target)
-        .order_by(ScheduledTask.id)
-    )
+    today = _today(user)
+    # A day that has been reported on already has a row; a day still ahead does
+    # not, and is computed. Either way the student names the same thing.
+    task = next((t for t in _days_for(db, goal, today) if t.date == target), None)
     if task is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Nothing planned for that day")
     return _report_day(db, user, task, payload)
@@ -414,12 +456,27 @@ def _report_day(db: Session, user: User, task: ScheduledTask, payload: Scheduled
     unit = db.get(ProgressUnit, task.progress_unit_id) if task.progress_unit_id else None
     material = unit.material if unit is not None else None
 
-    # What this row currently claims to have contributed. A row ticked before
-    # actual_quantity existed carries no amount, and the only honest reading of
-    # it is the full planned quantity.
-    previous = task.actual_quantity
-    if previous is None:
-        previous = task.quantity if task.completed else 0.0
+    # What this day has already contributed, so that re-reporting corrects
+    # rather than adds a second helping.
+    #
+    # A derived day carries nothing: it is rebuilt from the generator on every
+    # read, so it always looks untouched no matter how often it has been
+    # reported. The record of what happened is the `ExecutionRecord`, and for a
+    # day with no row that is the only place the previous amount exists —
+    # reading it off the transient object instead applied five pages twice.
+    prior = db.scalar(
+        select(ExecutionRecord).where(
+            ExecutionRecord.goal_id == task.goal_id, ExecutionRecord.date == task.date
+        )
+    )
+    if prior is not None:
+        previous = prior.actual_units or 0.0
+    else:
+        # A stored row ticked before `actual_quantity` existed carries no
+        # amount, and the only honest reading of it is the full planned figure.
+        previous = task.actual_quantity
+        if previous is None:
+            previous = task.quantity if task.completed else 0.0
 
     if payload.completed:
         actual = payload.actual_quantity if payload.actual_quantity is not None else task.quantity
@@ -466,23 +523,18 @@ def _report_day(db: Session, user: User, task: ScheduledTask, payload: Scheduled
     # toggled. Correcting an *earlier* day has to re-evaluate today as well, or
     # today keeps showing a plan computed from a position that no longer holds —
     # which is what let a missed day quietly disappear from the schedule.
-    today = _today(user)
-    # Read the row out *before* redistributing. Un-ticking a day that has not
-    # arrived yet puts it back to never-reported, which is exactly the state the
-    # rebuild is entitled to delete — so the row the response describes can stop
-    # existing halfway through this function. It used to be refreshed after the
-    # rebuild and raised `InvalidRequestError`, i.e. a 500 on the calendar's own
-    # "I did not actually do this" control. The answer is the row's last true
-    # state, not a row id that survived.
+    # Nothing to redistribute: the rest of the plan is computed from the
+    # mission's position on every read, and that position has just changed. The
+    # old code rebuilt and rewrote the stored future here, which is the write
+    # this cutover exists to remove.
+    #
+    # Read the row out before committing. Un-ticking a day still ahead returns
+    # it to never-reported, and a derived day has no row at all — either way the
+    # object the response describes may not survive, which used to raise
+    # `InvalidRequestError`: a 500 on the calendar's own "I did not do this"
+    # control. The answer is the day's last true state, not a row that lived.
     answer = ScheduledTaskOut.model_validate(task)
-    if task.date >= today:
-        engine.rebuild_schedule(db, task.goal, today, from_date=today + timedelta(days=1))
-    else:
-        engine.rebuild_schedule(db, task.goal, today)
     db.commit()
-    if inspect(task).persistent:
-        db.refresh(task)
-        answer = ScheduledTaskOut.model_validate(task)
     return TaskUpdateOut(task=answer, overshoot=round(overshoot, 2), message=message)
 
 
@@ -495,11 +547,7 @@ def get_schedule(
     """Upcoming schedule, starting today."""
     today = _today(goal.user)
     _sync_schedule(db, goal, today)
-    tasks = db.scalars(
-        select(ScheduledTask)
-        .where(ScheduledTask.goal_id == goal.id, ScheduledTask.date >= today)
-        .order_by(ScheduledTask.date, ScheduledTask.id)
-    ).all()
+    tasks = _upcoming(db, goal, today)
     ranges = engine.derive_descriptions(goal, list(tasks), today)
     cutoff_seen: set = set()
     out = []
@@ -515,14 +563,11 @@ def get_schedule(
 
 @router.post("/goals/{goal_id}/schedule/rebuild", response_model=list[ScheduledTaskOut])
 def rebuild(goal: Goal = Depends(get_own_goal), db: Session = Depends(get_db)):
+    # Kept so a deployed client calling it still gets a sane answer. There is
+    # nothing to rebuild: the plan is recomputed from the mission's live
+    # position every time anybody looks at it.
     today = _today(goal.user)
-    engine.rebuild_schedule(db, goal, today)
-    db.commit()
-    return db.scalars(
-        select(ScheduledTask)
-        .where(ScheduledTask.goal_id == goal.id, ScheduledTask.date == today)
-        .order_by(ScheduledTask.id)
-    ).all()
+    return [t for t in _days_for(db, goal, today) if t.date == today]
 
 
 @router.get("/goals/{goal_id}/history", response_model=list[ScheduledTaskOut])

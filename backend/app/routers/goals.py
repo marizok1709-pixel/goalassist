@@ -64,8 +64,9 @@ def update_goal(
     data = payload.model_dump(exclude_unset=True)
     for field, value in data.items():
         setattr(goal, field, value)
-    if "deadline" in data:
-        engine.rebuild_schedule(db, goal, clock.today_for(goal.user))
+    # Moving the deadline changes the whole shape of the plan, and used to
+    # trigger a rebuild. Nothing to rebuild now — the plan is computed from the
+    # mission's live position, deadline included, on every read.
     db.commit()
     db.refresh(goal)
     return goal
@@ -155,7 +156,8 @@ def add_material(
     if payload.already_completed > 0:
         engine.apply_progress(material, payload.already_completed, absolute=True)
     db.refresh(goal)
-    engine.rebuild_schedule(db, goal, clock.today_for(goal.user))
+    # Nothing to rebuild: the plan is computed from the mission's live
+    # position on every read, so a change here is picked up by definition.
     db.commit()
     db.refresh(material)
     return material
@@ -190,7 +192,8 @@ def update_material_progress(
         unit = db.get(ProgressUnit, task.progress_unit_id) if task.progress_unit_id else None
         task.completed = bool(unit and unit.is_completed)
     db.flush()
-    engine.rebuild_schedule(db, goal, today)
+    # Nothing to rebuild: the plan is computed from the mission's live
+    # position on every read, so a change here is picked up by definition.
     db.commit()
     db.refresh(material)
     return material
@@ -262,7 +265,8 @@ def edit_material(
 
     db.flush()
     db.refresh(goal)
-    engine.rebuild_schedule(db, goal, today)
+    # Nothing to rebuild: the plan is computed from the mission's live
+    # position on every read, so a change here is picked up by definition.
     db.commit()
     db.refresh(material)
     return material
@@ -282,7 +286,8 @@ def delete_material(
     db.delete(material)
     db.flush()
     db.expire(goal)
-    engine.rebuild_schedule(db, goal, clock.today_for(goal.user))
+    # Nothing to rebuild: the plan is computed from the mission's live
+    # position on every read, so a change here is picked up by definition.
     db.commit()
 
 
@@ -339,7 +344,8 @@ def update_unit(
     ):
         task.completed = unit.is_completed
     db.flush()
-    engine.rebuild_schedule(db, goal, today)
+    # Nothing to rebuild: the plan is computed from the mission's live
+    # position on every read, so a change here is picked up by definition.
 
     db.commit()
     db.refresh(unit)

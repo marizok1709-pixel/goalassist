@@ -33,7 +33,7 @@ API docs: http://localhost:8000/docs
 | POST | `/goals/{id}/schedule/rebuild` | Redistribute remaining work |
 | GET | `/goals/{id}/history` | Past scheduled tasks (incl. missed) |
 | GET | `/today` | Today's tasks across all active missions |
-| PATCH | `/tasks/{id}` | Report a day; `actual_quantity` logs more/less than planned, `actual_minutes` logs how long it took |
+| PATCH | `/goals/{id}/days/{day}` | Report one day of one mission, named by the date. `actual_quantity` logs more/less than planned, `actual_minutes` logs how long it took. Replaced `PATCH /tasks/{id}`: a row id only existed because the forward plan was stored, and it no longer is |
 | POST | `/plan/preview` | **Does this fit?** — feasibility for a mission that does not exist yet, planned alongside the ones that do |
 | POST | `/goals/{id}/acknowledge` | The student has seen that the plan got heavier; resets the quiet threshold |
 | GET | `/dashboard` | All active missions + Reality Engine status |

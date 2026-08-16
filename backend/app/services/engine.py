@@ -432,6 +432,47 @@ def reported_dates(db: Session, goal: Goal, from_date: date) -> set[date]:
     )
 
 
+def derive_schedule(db: Session, goal: Goal, today: date) -> list[ScheduledTask]:
+    """The forward plan, computed and never written down.
+
+    This is the whole point of the cutover. A stored forward plan is a claim
+    about a day that has not happened yet, and the moment reality moves it
+    becomes a lie the database keeps repeating — which is how a Friday came to
+    owe 139 points beside a Saturday starting at 246.
+
+    The rows come out of `build_schedule`, the same generator `rebuild_schedule`
+    used to persist, walking the same unit cursor. Identical by construction:
+    what changes is only that nothing is added to the session. The objects are
+    transient `ScheduledTask` instances so every reader and serialiser keeps
+    working unchanged — they simply have no id, because there is no row.
+
+    Days already spoken about keep their stored row (that is history, and
+    history is the one thing that *should* be persisted), so they are skipped
+    here rather than generated over.
+    """
+    if not goal.materials:
+        return []
+    skip = reported_dates(db, goal, today)
+    # `build_schedule` walks one material at a time, so its output is grouped by
+    # material. Stored rows came back ordered by (date, id) — date first, and
+    # within a date the order they were generated in. A *stable* sort on date
+    # alone reproduces exactly that, and every screen depends on it: the first
+    # entry for today is the one the day leads with.
+    return sorted(
+        (
+            # `completed=False` explicitly: a column default is applied by the
+            # database on insert, and nothing here is ever inserted, so a
+            # transient row would otherwise carry None and fail serialisation.
+            # A day that has not arrived is not done — say so.
+            ScheduledTask(**t, completed=False, actual_quantity=None)
+            for t in build_schedule(
+                goal, today, availability=goal.user.availability, skip_dates=skip
+            )
+        ),
+        key=lambda t: t.date,
+    )
+
+
 def rebuild_schedule(db: Session, goal: Goal, today: date, from_date: date | None = None) -> None:
     """Delete the unreported future schedule and redistribute remaining work.
 

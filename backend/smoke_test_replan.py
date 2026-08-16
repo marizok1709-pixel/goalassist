@@ -50,6 +50,13 @@ client = TestClient(app)
 failures = []
 
 
+def db_rows_after(goal_id):
+    db = database.SessionLocal()
+    rows = list(db.query(ScheduledTask).filter(ScheduledTask.goal_id == goal_id))
+    db.close()
+    return rows
+
+
 def check(label, cond, detail=""):
     print(f"[{'PASS' if cond else 'FAIL'}] {label}{'' if cond else '  → ' + str(detail)}")
     if not cond:
@@ -183,7 +190,7 @@ check("today has a task", len(today_rows) == 1, str(len(today_rows)))
 planned = today_rows[0]["quantity"]
 
 client.patch(
-    f"/tasks/{today_rows[0]['id']}", headers=H2, json={"completed": True, "actual_quantity": 1}
+    f"/goals/{today_rows[0]['goal_id']}/days/{today_rows[0]['date']}", headers=H2, json={"completed": True, "actual_quantity": 1}
 )
 
 rows2 = calendar(H2, TODAY, TODAY + timedelta(days=30))
@@ -213,7 +220,7 @@ future = next(r for r in sched if r["date"] > TODAY.isoformat())
 future_date = future["date"]
 
 client.patch(
-    f"/tasks/{future['id']}", headers=H3, json={"completed": True, "actual_quantity": 1}
+    f"/goals/{future['goal_id']}/days/{future['date']}", headers=H3, json={"completed": True, "actual_quantity": 1}
 )
 # Force a rebuild that spans the reported future day.
 client.post(f"/goals/{gid3}/schedule/rebuild", headers=H3)
@@ -236,10 +243,16 @@ backdate(gid4, 3)
 
 client.get("/today", headers=H4)
 db = database.SessionLocal()
-stamp = db.get(Goal, gid4).replanned_on
 ids_first = sorted(t.id for t in db.query(ScheduledTask).filter(ScheduledTask.goal_id == gid4))
 db.close()
-check("the catch-up stamps the day it ran", stamp == TODAY, str(stamp))
+# `Goal.replanned_on` used to be stamped here: the day-turn catch-up gated a
+# rebuild to once per day, because a stored plan had to be repaired after a day
+# went by. There is nothing to repair now — the plan is computed from the
+# mission's live position on every read, so a day that passes unreported is
+# absorbed by definition rather than by a scheduled visit. The property that
+# check was protecting is the one directly above: the missed work reappears.
+check("nothing beyond today was written down",
+      all(t.date <= TODAY for t in db_rows_after(gid4)), "a future row was persisted")
 
 client.get("/today", headers=H4)
 client.get("/calendar", headers=H4, params={"start": TODAY.isoformat(), "end": TODAY.isoformat()})

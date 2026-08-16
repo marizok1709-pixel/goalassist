@@ -4,6 +4,55 @@ All notable changes to Goal Assist, newest first. Dates are yyyy-mm-dd.
 This is a pre-beta product; entries focus on user-visible behaviour and notable
 engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 
+## 2026-08-17 — the forward plan is computed, never stored
+
+The cutover Phase 1 left unfinished. **120 stored future rows → 0.**
+
+### Changed
+
+- **Nothing about tomorrow is written down any more.** `rebuild_schedule` wrote
+  days that had not arrived from **eleven call sites**; all eleven are gone.
+  Everything past today is computed from the mission's live position on every
+  read, so a day that goes by unreported is absorbed by definition rather than
+  by a scheduled repair. This is the defect that made a Friday owe 139 points
+  beside a Saturday starting at 246 — removed rather than mitigated.
+- **A day is reported by naming the day.** `PATCH /tasks/{id}` is replaced by
+  **`PATCH /goals/{id}/days/{day}`**. A row id only ever existed because the
+  future was stored. The frontend, 26 suite call sites and the API map all moved
+  with it; `ScheduledTaskOut.id` is now optional and absent for any day ahead.
+- **`scheduled_tasks` keeps only what happened.** A row is materialised when its
+  day arrives or when it is reported on — never ahead. Today stays *live* until
+  it is reported on: while nobody has spoken about it the row is re-derived on
+  every read, because a row written this morning is stale by the afternoon.
+  Missed days still appear on the calendar, which is why today is written at all.
+
+### Fixed
+
+- **Every upcoming day showed the same description.** `derive_descriptions` is
+  keyed by row id; a computed day has none, so they all collided and a book
+  rendered as "Mock exams: exam #10". Found by an existing check.
+- **A stale ordering assumption.** Stored rows came back sorted by `(date, id)`
+  while the generator groups by material, so the first entry for today was the
+  wrong one. A stable sort on date restores it.
+- **The mobile suite failed on a dev-tools overlay.** The first tab's centre was
+  hitting `<nextjs-portal>` — the `next dev` indicator, which lives in the
+  bottom-left corner and does not exist in a production build. The consent
+  banner was correctly stacked above the tab bar throughout. The check now
+  ignores it.
+
+### Verification
+
+12 backend suites / 379 checks · 97 browser checks · 14 documentation claims.
+**The golden file reports the two real missions' plans unchanged** — precisely
+the change it was built to guard. Check `D` now holds the new invariant
+(`rebuild_schedule` call sites `== 0` ⟺ the document says the plan is derived)
+and was proven red by adding a call site back.
+
+### Note
+
+The API change means **backend and frontend must deploy together**; an old
+frontend cannot log a day against the new backend.
+
 ## 2026-08-16 — Phase 1 goes live, and two defects only production could find
 
 The pivot reached real users: feasibility before commitment, a projected finish

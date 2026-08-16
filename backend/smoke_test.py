@@ -114,7 +114,7 @@ if not today_tasks:
             today_tasks = m["tasks"]
 task = today_tasks[0]
 planned = task["quantity"]
-r = client.patch(f"/tasks/{task['id']}", headers=H, json={
+r = client.patch(f"/goals/{task['goal_id']}/days/{task['date']}", headers=H, json={
     "completed": True, "actual_quantity": planned + 8}).json()
 check("overshoot detected", r["overshoot"] == 8, str(r["overshoot"]))
 check("magic message", r["message"] is not None and "reduced" in r["message"], str(r["message"]))

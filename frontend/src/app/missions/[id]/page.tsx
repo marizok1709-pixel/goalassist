@@ -469,7 +469,7 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
             <div className="mt-4">
               <DataTable
                 rows={history}
-                getKey={(t) => t.id}
+                getKey={(t) => `${t.date}:${t.material_id ?? "x"}`}
                 empty={
                   <EmptyState
                     title="No history yet"
@@ -573,7 +573,7 @@ function ScheduleList({ tasks }: { tasks: ScheduledTask[] }) {
           </span>
           <div className="flex-1 space-y-0.5">
             {dayTasks.map((t) => (
-              <p key={t.id} className={`text-sm ${t.completed ? "text-ink-muted line-through" : "text-ink-2"}`}>
+              <p key={`${t.date}:${t.material_id ?? "x"}`} className={`text-sm ${t.completed ? "text-ink-muted line-through" : "text-ink-2"}`}>
                 {t.description}
               </p>
             ))}

@@ -27,6 +27,12 @@ function addDays(d: Date, n: number): Date {
 
 type View = "week" | "month";
 
+/** A day of work's identity: mission + date + material. See `today/page.tsx` —
+ * the row id this replaces only existed because the plan used to be stored. */
+function dayKey(t: { goal_id: number; date: string; material_id: number | null }) {
+  return `${t.goal_id}:${t.date}:${t.material_id ?? "x"}`;
+}
+
 export default function CalendarPage() {
   const router = useRouter();
   const now = new Date();
@@ -38,8 +44,8 @@ export default function CalendarPage() {
   const [tasks, setTasks] = useState<CalendarTask[] | null>(null);
   const [selected, setSelected] = useState<string>(iso(now));
 
-  const [busy, setBusy] = useState<number | null>(null);
-  const [logOpen, setLogOpen] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState<string | null>(null);
   const [logValue, setLogValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -53,10 +59,10 @@ export default function CalendarPage() {
    *  day re-plans from today — so the whole range is refetched, never patched
    *  in place. */
   async function commit(task: CalendarTask, body: { completed: boolean; actual_quantity?: number }) {
-    setBusy(task.id);
+    setBusy(dayKey(task));
     setError(null);
     try {
-      await api.updateTask(task.id, body);
+      await api.updateDay(task.goal_id, task.date, body);
       setLogOpen(null);
       await load();
     } catch {
@@ -71,12 +77,12 @@ export default function CalendarPage() {
   }
 
   function toggleLog(task: CalendarTask) {
-    if (logOpen === task.id) {
+    if (logOpen === dayKey(task)) {
       setLogOpen(null);
       return;
     }
     setLogValue(String(task.actual_quantity ?? task.quantity));
-    setLogOpen(task.id);
+    setLogOpen(dayKey(task));
   }
 
   const logValid =
@@ -216,7 +222,7 @@ export default function CalendarPage() {
               {selectedTasks.map((t) => {
                 const reported = t.actual_quantity !== null;
                 return (
-                  <li key={t.id} className="ob-glass overflow-hidden rounded-2xl text-sm">
+                  <li key={dayKey(t)} className="ob-glass overflow-hidden rounded-2xl text-sm">
                     <div className="flex items-start gap-2.5 px-2 py-1 sm:px-4 sm:py-2">
                       {/* Any day is editable, past included — the day you need to
                           correct is almost always one that has already gone. */}
@@ -224,7 +230,7 @@ export default function CalendarPage() {
                         <input
                           type="checkbox"
                           checked={t.completed}
-                          disabled={busy === t.id}
+                          disabled={busy === dayKey(t)}
                           onChange={(e) => setDone(t, e.target.checked)}
                           className="ga-check"
                         />
@@ -256,13 +262,13 @@ export default function CalendarPage() {
                         onClick={() => toggleLog(t)}
                         title="Log the amount you actually did"
                         className={`shrink-0 px-2 py-3.5 text-xs ${
-                          logOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"
+                          logOpen === dayKey(t) ? "text-ink" : "text-ink-muted hover:text-ink"
                         }`}
                       >
                         {reported ? "edit" : "log"}
                       </button>
                     </div>
-                    {logOpen === t.id && (
+                    {logOpen === dayKey(t) && (
                       <div className="border-t border-veil/10 bg-veil/[0.04] px-4 py-3">
                         <p className="text-[13px] text-ink-2">
                           Planned: <span className="tnum">{t.quantity}</span>. How much did you
@@ -284,7 +290,7 @@ export default function CalendarPage() {
                           />
                           <button
                             onClick={() => submitLog(t)}
-                            disabled={busy === t.id || !logValid}
+                            disabled={busy === dayKey(t) || !logValid}
                             className="ob-btn rounded-xl px-5 py-2 text-xs font-semibold disabled:opacity-40"
                           >
                             Log it
@@ -335,7 +341,7 @@ function LoadDots({
     <span className="flex flex-wrap items-center justify-center gap-[3px]">
       {tasks.slice(0, max).map((t) => (
         <span
-          key={t.id}
+          key={dayKey(t)}
           className={`h-1.5 w-1.5 rounded-full ${
             t.completed ? "bg-good" : missed ? "bg-bad" : "bg-accent"
           }`}
@@ -410,7 +416,7 @@ function WeekGrid({
             <div className="mt-2 hidden space-y-1 sm:block">
               {dayTasks.map((t) => (
                 <p
-                  key={t.id}
+                  key={dayKey(t)}
                   className={`rounded px-1.5 py-1 text-[11px] leading-snug ${
                     t.completed
                       ? "bg-veil/[0.04] text-ink-muted line-through"
@@ -504,7 +510,7 @@ function MonthGrid({
             <div className="mt-1 hidden space-y-0.5 sm:block">
               {dayTasks.slice(0, 2).map((t) => (
                 <p
-                  key={t.id}
+                  key={dayKey(t)}
                   className={`truncate rounded px-1 py-0.5 text-[10px] leading-tight ${
                     t.completed
                       ? "bg-veil/[0.04] text-ink-muted line-through"

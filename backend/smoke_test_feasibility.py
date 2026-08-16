@@ -218,8 +218,9 @@ for g in dash["goals"]:
 # ---------------------------------------------------------------- ExecutionRecord
 tasks4 = [t for m in client.get("/today", headers=H4).json()["missions"] for t in m["tasks"]]
 check("there is something to report today", len(tasks4) > 0, tasks4)
-tid = tasks4[0]["id"]
-r = client.patch(f"/tasks/{tid}", headers=H4,
+day4 = tasks4[0]["date"]
+goal4 = tasks4[0]["goal_id"]
+r = client.patch(f"/goals/{goal4}/days/{day4}", headers=H4,
                  json={"completed": True, "actual_quantity": 5, "actual_minutes": 42})
 check("a day can be reported with the time it took", r.status_code == 200, r.text[:200])
 
@@ -237,7 +238,7 @@ check("no record is ever written ahead of its day",
 db.close()
 
 # Correcting the same day rewrites the record rather than filing a second.
-client.patch(f"/tasks/{tid}", headers=H4,
+client.patch(f"/goals/{goal4}/days/{day4}", headers=H4,
              json={"completed": True, "actual_quantity": 9, "actual_minutes": 70})
 db = database.SessionLocal()
 recs = list(db.scalars(select(ExecutionRecord)))
@@ -246,14 +247,14 @@ check("re-reporting corrects the record instead of duplicating it",
 db.close()
 
 # Un-ticking removes it: "never reported" and "reported nothing" are different.
-client.patch(f"/tasks/{tid}", headers=H4, json={"completed": False})
+client.patch(f"/goals/{goal4}/days/{day4}", headers=H4, json={"completed": False})
 db = database.SessionLocal()
 check("un-ticking removes the record entirely",
       len(list(db.scalars(select(ExecutionRecord)))) == 0)
 db.close()
 
 # A reported zero is a record, not an absence.
-client.patch(f"/tasks/{tid}", headers=H4, json={"completed": True, "actual_quantity": 0})
+client.patch(f"/goals/{goal4}/days/{day4}", headers=H4, json={"completed": True, "actual_quantity": 0})
 db = database.SessionLocal()
 recs = list(db.scalars(select(ExecutionRecord)))
 check("a reported zero is recorded as SKIPPED, not as silence",

@@ -26,77 +26,58 @@ pivot) are now in front of real users for the first time. `main` and
 
 ## ▶️ Resume here
 
-The deploy is done. What is left is the work the deploy unblocked.
+**Not deployed.** The cutover changes the API — `PATCH /tasks/{id}` is gone —
+so backend and frontend must go out **together**. An old frontend against the
+new backend cannot log a day.
 
-1. **Ask the two users why.** Twelve days, zero movement — and they have now
-   never seen the product that tells them the truth *before* they commit. Sima
-   stopped at `registered`, so hers is "what did you see when you signed up?";
-   Vasiliy has a mission and 0/22 ticks, so his is "you opened it, saw the list —
-   what stopped you?" Free, and worth more than anything else on this list.
-2. **Finish the cutover** (below). It is the one part of Phase 1 that did not
-   land, and it is the difference between the forward plan being *derived* and
-   merely being *mitigated*.
+1. **Deploy, both halves in one go.** Backend first, frontend immediately after,
+   no gap. Commands in "Deploy topology" below.
+2. **Watch Sima.** She returned on 2026-08-16 and reached `availability` — the
+   furthest anyone has ever come. She is one tick from the metric. If she stalls
+   at the first tick, that is worth more than anything else on the queue.
 3. **Then the queue.**
 
-### What the 2026-08-16 deploy cost, and what it taught
+### The cutover is done — the forward plan is no longer stored
 
-Two defects reached production, neither of which any of the 354 local checks
-could have caught. Both are now gated.
+Finished 2026-08-17, completing Part 3 step 3 of the pivot plan.
 
-- **A migration default the ORM could not read back.** `Enum(GoalPriority)`
-  persists the member *name* (`normal`); `migrate.py` wrote the *value*
-  (`NORMAL`). The cold start stamped all four production goals with a string the
-  ORM refuses to load, so every logged-in read of a mission threw `LookupError`
-  until the rows were rewritten by hand. `/health` and `/dashboard` both stayed
-  green throughout, because neither loads a goal. **The suites build their schema
-  with `create_all()` and never execute the ALTER TABLE path that only production
-  takes** — that is the gap, and check J in `scripts/verify_claims.py` now closes
-  it.
-- **A date field the phone could not fit.** iOS Safari sizes a native
-  `input[type="date"]` to its formatted value and will not shrink below it, so a
-  Russian-locale date pushed `/missions/new` ~120px past the viewport and every
-  label was cut off. Chrome shrinks the identical control, so a 360px sweep and
-  44 mobile checks stayed honestly green. Detail in `VERIFICATION.md`.
+`engine.rebuild_schedule` had **eleven call sites** writing days that had not
+arrived. All eleven are gone, and so is the row id they existed to create:
+`PATCH /tasks/{id}` is replaced by **`PATCH /goals/{id}/days/{day}`**, because a
+student reports what happened on a date, not what happened to a database row.
 
-**Row #2149 needed no repair.** The dry run showed `completed=False,
-actual_quantity=0.0` — identical before and after — so the phantom tick was
-already gone and nothing was applied. Note the material now reads **106/1497
-points**, not the 87/1400 recorded here earlier.
+What `ScheduledTask` holds now is one thing: **days that have happened.** A row
+is materialised when its day arrives, or when it is reported on — never ahead.
+Everything past today is computed from the mission's live position on every
+read, so a day that goes by unreported is absorbed by definition rather than by
+a scheduled repair.
 
-### The one part of Phase 1 that is not finished
+Two rules keep it honest:
 
-**The cutover is partial, and two engines now coexist.**
+- **Today stays live until it is reported on.** It is written down so a missed
+  day leaves a trace, but while nobody has spoken about it the row is
+  re-derived on every read — a row written this morning is stale by the
+  afternoon, which is the original defect in miniature.
+- **Nothing beyond today is ever written.** `smoke_test_derived.py` prints the
+  count on every run; it is **0**, down from 120.
 
-- `services/planner.py` (new, pure, no DB) answers *will you make it* — the
-  verdict and the projected finish date. It is live, through
-  `adapter.plan_for()` in `routers/plan.py` and `routers/feasibility.py`.
-- `services/engine.py`'s `build_schedule` / `rebuild_schedule` (old) still
-  produce the day's rows as `ScheduledTask` — 40 references in `plan.py`, 18 in
-  `admin.py`, 8 in `goals.py`.
-
-Part 3, step 3 of the approved plan — _"`ScheduledTask` forward rows stop being
-written; `rebuild_schedule` and the twelve call sites it has retire with it"_ —
-**did not happen.** So the forward plan is still persisted, which is the exact
-defect this phase existed to end. It is *mitigated* (the day-turn replan gated by
-`Goal.replanned_on`, plus `engine.derive_descriptions` deriving ranges at read
-time), not removed. Finish it before Phase 2, or the mitigation becomes the
-architecture.
+Evidence: the golden file reports the two real missions' plans **unchanged**,
+which is exactly what it was built for.
 
 ## The queue
 
 | # | Item | Size | Why it is here |
 |---|---|---|---|
-| 1 | **Ask the two users why** | free | One message each. Vasiliy: "you opened it, saw the list — what stopped you?" Sima never made a mission, so hers is "what did you see when you signed up?" Worth more than any analytics at n=2 |
-| 2 | **Finish the cutover** | ~1 day | Ends the two-engine split above, and actually stops persisting the forward plan |
-| 3 | **"I fell behind — fix my plan"** | 2–4h | **Much cheaper than first costed**: `components/reality-check.tsx` and the `suggested_deadline` / `suggested_scope` / `suggested_weekly_hours` fields already exist and are wired into both creation paths. This is mounting them on `missions/[id]` over the `PATCH /goals/{id}` that already rebuilds. Today the product's honesty terminates in a dead end whose only exit is quitting |
-| 4 | **Daily email** | ½ day | Cheap, and it buys password reset for free. Expect amplification, not salvation |
-| 5 | **Pivot Phase 2** | — | Material library + `unit_type` enum. Settle the `DAILY_EFFECTIVE_CAP` question below first |
-| 6 | **Pivot Phase 3** | — | Calibration ("we assumed 4.5 min/page; you run 6.2") and mission debrief. **Data-gated, not effort-gated** — `actual_minutes` has to accumulate from real use first, and as of now nobody has logged a single day |
+| 1 | **"I fell behind — fix my plan"** | 2–4h | **Much cheaper than first costed**: `components/reality-check.tsx` and the `suggested_deadline` / `suggested_scope` / `suggested_weekly_hours` fields already exist and are wired into both creation paths. This is mounting them on `missions/[id]` over the `PATCH /goals/{id}` that already rebuilds. Today the product's honesty terminates in a dead end whose only exit is quitting |
+| 2 | **Daily email** | ½ day | Cheap, and it buys password reset for free. Expect amplification, not salvation |
+| 3 | **Pivot Phase 2** | — | Material library + `unit_type` enum. Settle the `DAILY_EFFECTIVE_CAP` question below first |
+| 4 | **Pivot Phase 3** | — | Calibration ("we assumed 4.5 min/page; you run 6.2") and mission debrief. **Data-gated, not effort-gated** — `actual_minutes` has to accumulate from real use first, and as of now nobody has logged a single day |
 
 **Retired as done:** mobile layout pass (08-06, locked by `verify/mobile.mjs`) ·
 availability back in the flow (08-07) · timezone as a stored IANA string (pivot
 Part 0b) · honest day logging (08-12) · scheduler correctness (08-15) ·
-**deploying Phase 1 (08-16)**.
+**deploying Phase 1 (08-16)** · **asking the two users (08-16)** ·
+**finishing the cutover (08-17)**.
 
 ## Decisions in force
 
@@ -134,17 +115,28 @@ beyond ticking Neon's PITR box · **native app**.
 None are wrong. All are infrastructure for a scale that does not exist. Revisit
 each when a real user's behaviour demands it.
 
-## The beta (funnel, 2026-08-16)
+## The beta (funnel, 2026-08-17)
+
+**It moved.** First change in twelve days, the day after both users were asked
+directly.
 
 | Account | Registered | Mission | Rhythm | Tasks | Stopped at |
 |---|---|---|---|---|---|
-| `serafimastsevaya@gmail.com` (Sima) | 2026-08-05 | — none — | none | 0 | **registered** |
+| `serafima.mastsevaya@gmail.com` (Sima, **new address**) | 2026-08-16 | "Pass exam" | rest days set | 0 / 2 | **availability** |
 | `boberkurkurkur@gmail.com` (Vasiliy) | 2026-08-05 | "Watch two lessons from my nutritionist every day" | none | 0 / 22 | **mission** |
+| `serafimastsevaya@gmail.com` (Sima's first account) | 2026-08-05 | — none — | none | 0 | **registered** |
 
-Unchanged in eleven days: no new accounts, no mission for Sima, and Vasiliy has
-never ticked anything. `availability` is NULL for both — the onboarding rhythm
-step that fixes this is built but has never been deployed, so neither has been
-asked. Refresh with:
+```
+registered  3  ·  mission  2  ·  availability  1  ·  first tick  0  ·  complete  0
+```
+
+Sima came back on a **second address** (note the added dot) rather than
+returning to the first — worth knowing before reading the funnel as three
+people. She is at `availability`, the furthest anyone has reached, and one tick
+from the metric. Nobody has ever logged a day, which is also why Phase 3 cannot
+start.
+
+Refresh with:
 
 ```bash
 cd backend && set -a; . ./.env.local; set +a; .venv/bin/python funnel.py

@@ -140,6 +140,9 @@ client.post(
     json={"name": "A book", "total_quantity": 100, "unit": "pages", "already_completed": 0},
     headers=H,
 )
+# Touch the app so today exists as a stored day; the forward plan is computed
+# and deliberately not exportable, because it is not data about the student.
+client.get("/today", headers=H)
 exp = client.get("/me/export", headers=H)
 check("export returns 200", exp.status_code == 200, exp.status_code)
 data = exp.json()

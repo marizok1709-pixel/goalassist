@@ -126,33 +126,43 @@ after = client.get(f"/goals/{gid}/plan", headers=H).json()
 check("…and gives the work back to the plan",
       abs(after["materials"][0]["completed"]) < 1e-6, after["materials"][0]["completed"])
 
-# ------------------------------------------------------------------ equivalence
-# The same report through both doors must land in the same place, or the two
-# write paths have already begun to disagree.
-Ha, Hb = register("eqa@example.com"), register("eqb@example.com")
-ga, gb = make_mission(Ha, "A"), make_mission(Hb, "B")
+# ------------------------------------------------- the forward plan is derived
+# The invariant the whole cutover exists to establish. An upcoming day is a
+# computation, not a record: it has no row, therefore no id, therefore nothing
+# can name it except the mission and the date.
+Ha = register("eqa@example.com")
+ga = make_mission(Ha, "A")
 
-today_a = client.get("/today", headers=Ha).json()
-task_id = [t for m in today_a["missions"] for t in m["tasks"]][0]["id"]
-row = client.patch(f"/tasks/{task_id}", headers=Ha,
-                   json={"completed": True, "actual_quantity": 4, "actual_minutes": 25}).json()
-day = client.patch(f"/goals/{gb}/days/{TODAY.isoformat()}", headers=Hb,
-                   json={"completed": True, "actual_quantity": 4, "actual_minutes": 25}).json()
+today_rows = [t for m in client.get("/today", headers=Ha).json()["missions"] for t in m["tasks"]]
+check("today still has work to do", len(today_rows) > 0, today_rows)
 
-check("both doors report the same overshoot", row["overshoot"] == day["overshoot"],
-      f'{row["overshoot"]} vs {day["overshoot"]}')
-check("both doors report the same message", row["message"] == day["message"],
-      f'{row["message"]!r} vs {day["message"]!r}')
-ra, rb = records(ga)[0], records(gb)[0]
-check("both write one record with the same units and status",
-      (ra.actual_units, ra.status) == (rb.actual_units, rb.status),
-      f"{(ra.actual_units, ra.status)} vs {(rb.actual_units, rb.status)}")
-check("both record the same minutes", ra.actual_minutes == rb.actual_minutes,
-      f"{ra.actual_minutes} vs {rb.actual_minutes}")
+# Today is written down — it has arrived, and a day that goes by unreported has
+# to leave a trace or missed days would vanish from the calendar. Everything
+# *after* today is a computation and has no row to be named by.
+sched = client.get(f"/goals/{ga}/schedule", headers=Ha).json()
+ahead = [t for t in sched if t["date"] > TODAY.isoformat()]
+check("the schedule reaches past today", len(ahead) > 0, len(ahead))
+check("no day beyond today carries a row id",
+      all(t["id"] is None for t in ahead), [t["id"] for t in ahead][:5])
 
+with database.SessionLocal() as db:
+    check("and nothing was written for a day that has not arrived",
+          db.query(ScheduledTask).filter(ScheduledTask.date > TODAY).count() == 0,
+          db.query(ScheduledTask).filter(ScheduledTask.date > TODAY).count())
+
+# The row-keyed door is gone, not merely unused.
+r = client.patch("/tasks/1", headers=Ha, json={"completed": True})
+check("the row-keyed endpoint no longer exists", r.status_code == 404, r.status_code)
+
+# Reporting still works, and a reported day *does* become a record.
+client.patch(f"/goals/{ga}/days/{TODAY.isoformat()}", headers=Ha,
+             json={"completed": True, "actual_quantity": 4, "actual_minutes": 25})
+check("reporting a derived day still records it", len(records(ga)) == 1, len(records(ga)))
 pa = client.get(f"/goals/{ga}/plan", headers=Ha).json()["materials"][0]["completed"]
-pb = client.get(f"/goals/{gb}/plan", headers=Hb).json()["materials"][0]["completed"]
-check("both leave the material in the same position", abs(pa - pb) < 1e-6, f"{pa} vs {pb}")
+check("…and moves the material", abs(pa - 4) < 1e-6, pa)
+
+Hb = register("eqb@example.com")
+gb = make_mission(Hb, "B")
 
 # ------------------------------------------------------------------- the guards
 r = client.patch(
@@ -191,7 +201,7 @@ check("…and un-reported without a 500", r.status_code == 200, r.text[:160])
 pf = client.get(f"/goals/{gf}/plan", headers=Hf).json()["materials"][0]["completed"]
 check("…giving the work back to the plan", abs(pf) < 1e-6, pf)
 
-r = client.patch(f"/tasks/{fut['id']}", headers=Hf, json={"completed": False})
+r = client.patch(f"/goals/{fut['goal_id']}/days/{fut['date']}", headers=Hf, json={"completed": False})
 check("the row-keyed door survives the same correction",
       r.status_code in (200, 404), r.status_code)
 

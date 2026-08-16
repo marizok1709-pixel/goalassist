@@ -265,7 +265,13 @@ try {
       const covered = [...document.querySelectorAll(".ga-tabbar a")].filter((a) => {
         const r = a.getBoundingClientRect();
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        return !hit || (hit !== a && !a.contains(hit));
+        if (!hit) return true;
+        // `next dev` paints its own indicator into the bottom-left corner —
+        // exactly where the first tab lives — as <nextjs-portal>. It does not
+        // exist in a production build, so counting it as something covering the
+        // navigation fails the suite for a reason no user can ever encounter.
+        if (hit.tagName === "NEXTJS-PORTAL" || hit.closest?.("nextjs-portal")) return false;
+        return hit !== a && !a.contains(hit);
       });
       const small = [...el.querySelectorAll("a[href], button")].filter((c) => {
         const r = c.getBoundingClientRect();

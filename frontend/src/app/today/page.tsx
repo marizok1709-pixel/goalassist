@@ -38,14 +38,23 @@ function praiseFor(done: number): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+/** A day of work's identity: mission + date + material.
+ *
+ * This used to be a row id from the database. The forward plan is computed now,
+ * so there is no row and no id — and this is the identity the work always had.
+ */
+function dayKey(t: { goal_id: number; date: string; material_id: number | null }) {
+  return `${t.goal_id}:${t.date}:${t.material_id ?? "x"}`;
+}
+
 export default function TodayPage() {
   const router = useRouter();
   const [data, setData] = useState<Today | null>(null);
-  const [busy, setBusy] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [praise, setPraise] = useState<string | null>(null);
-  const [whyOpen, setWhyOpen] = useState<number | null>(null);
-  const [logOpen, setLogOpen] = useState<number | null>(null);
+  const [whyOpen, setWhyOpen] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState<string | null>(null);
   const [logValue, setLogValue] = useState("");
   // How long it took. Optional on purpose — a student who does not answer must
   // not be blocked — but it is the only measurement of real pace the product
@@ -81,9 +90,9 @@ export default function TodayPage() {
     actual?: number,
     minutes?: number
   ) {
-    setBusy(task.id);
+    setBusy(dayKey(task));
     try {
-      const res = await api.updateTask(task.id, {
+      const res = await api.updateDay(task.goal_id, task.date, {
         completed,
         actual_quantity: actual,
         actual_minutes: minutes,
@@ -102,13 +111,13 @@ export default function TodayPage() {
   }
 
   function toggleLog(task: ScheduledTask) {
-    if (logOpen === task.id) {
+    if (logOpen === dayKey(task)) {
       setLogOpen(null);
       return;
     }
     setLogValue(String(task.quantity));
     setLogMinutes(task.minutes ? String(Math.round(task.minutes)) : "");
-    setLogOpen(task.id);
+    setLogOpen(dayKey(task));
     setWhyOpen(null);
   }
 
@@ -190,7 +199,7 @@ export default function TodayPage() {
                 <ul className="mt-2 space-y-2">
                   {m.tasks.map((t) => (
                     <li
-                      key={t.id}
+                      key={dayKey(t)}
                       className={`ob-glass overflow-hidden rounded-2xl transition-colors ${
                         t.completed ? "opacity-60" : "hover:bg-veil/[0.12]"
                       }`}
@@ -204,7 +213,7 @@ export default function TodayPage() {
                           <input
                             type="checkbox"
                             checked={t.completed}
-                            disabled={busy === t.id}
+                            disabled={busy === dayKey(t)}
                             onChange={(e) => finishTask(t, e.target.checked)}
                             className="ga-check"
                           />
@@ -241,10 +250,10 @@ export default function TodayPage() {
                             {t.why && (
                               <button
                                 onClick={() => {
-                                  setWhyOpen(whyOpen === t.id ? null : t.id);
+                                  setWhyOpen(whyOpen === dayKey(t) ? null : dayKey(t));
                                   setLogOpen(null);
                                 }}
-                                className={`px-2 py-3 text-xs sm:p-0 ${whyOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                                className={`px-2 py-3 text-xs sm:p-0 ${whyOpen === dayKey(t) ? "text-ink" : "text-ink-muted hover:text-ink"}`}
                               >
                                 Why?
                               </button>
@@ -252,19 +261,19 @@ export default function TodayPage() {
                             <button
                               onClick={() => toggleLog(t)}
                               title="Did more or less than planned? Log the real amount"
-                              className={`px-2 py-3 text-xs sm:p-0 ${logOpen === t.id ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                              className={`px-2 py-3 text-xs sm:p-0 ${logOpen === dayKey(t) ? "text-ink" : "text-ink-muted hover:text-ink"}`}
                             >
                               did more/less
                             </button>
                           </div>
                         )}
                       </div>
-                      {whyOpen === t.id && t.why && (
+                      {whyOpen === dayKey(t) && t.why && (
                         <p className="border-t border-veil/10 bg-veil/[0.04] px-4 py-2.5 text-[13px] leading-relaxed text-ink-2">
                           {t.why}
                         </p>
                       )}
-                      {logOpen === t.id && (
+                      {logOpen === dayKey(t) && (
                         <div className="border-t border-veil/10 bg-veil/[0.04] px-4 py-3">
                           <p className="text-[13px] text-ink-2">
                             Planned: <span className="tnum">{t.quantity}</span>. How much did you actually do?
@@ -303,7 +312,7 @@ export default function TodayPage() {
                             </label>
                             <button
                               onClick={() => submitLog(t)}
-                              disabled={busy === t.id || logValue.trim() === "" || Number(logValue) < 0 || Number.isNaN(Number(logValue))}
+                              disabled={busy === dayKey(t) || logValue.trim() === "" || Number(logValue) < 0 || Number.isNaN(Number(logValue))}
                               className="ob-btn rounded-xl px-5 py-2 text-xs font-semibold disabled:opacity-40"
                             >
                               Log it

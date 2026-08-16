@@ -166,19 +166,27 @@ def check_routes() -> None:
 
 # ------------------------------------------------------------- D: the cutover
 def check_cutover() -> None:
-    refs = 0
-    for path in (BACKEND / "app" / "routers").glob("*.py"):
-        refs += len(re.findall(r"\bScheduledTask\b", read(path)))
+    """The forward plan is derived, and the document says so — or neither.
+
+    `rebuild_schedule` was the only thing that wrote days that had not arrived,
+    from eleven call sites. Every one of them is gone, and `ScheduledTask` now
+    holds one thing: days that have happened. The biconditional is the point —
+    bringing the writes back without correcting the document fails this, and so
+    does claiming the plan is derived while something still schedules ahead.
+    """
+    callers = 0
+    for path in list((BACKEND / "app" / "routers").glob("*.py")) + [
+        BACKEND / "app" / "services" / "adapter.py"
+    ]:
+        callers += len(re.findall(r"rebuild_schedule\s*\(", read(path)))
 
     doc = read(REPO / "PROJECT_STATE.md").lower()
-    says_partial = "cutover is partial" in doc
+    says_derived = "the forward plan is derived" in doc
 
-    # The biconditional is the point. Finishing the cutover without updating the
-    # document fails; claiming it is finished while the writes remain fails too.
     check(
-        "D", "the documented cutover status matches the code",
-        (refs > 0) == says_partial,
-        f"{refs} ScheduledTask refs in routers, doc says partial={says_partial}",
+        "D", "the forward plan is derived, and the document agrees",
+        (callers == 0) == says_derived,
+        f"{callers} rebuild_schedule call sites, doc says derived={says_derived}",
     )
 
 
