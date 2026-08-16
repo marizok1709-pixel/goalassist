@@ -4,6 +4,82 @@ All notable changes to Goal Assist, newest first. Dates are yyyy-mm-dd.
 This is a pre-beta product; entries focus on user-visible behaviour and notable
 engineering decisions. Deeper resume context lives in `PROJECT_STATE.md`.
 
+## 2026-08-15 — the plan is computed, not remembered
+
+Two pieces of work, one root cause between them.
+
+### The bug the owner reported
+
+The calendar showed a Friday owing 139 Stepik points beside a Saturday starting
+at point 246 — 106 points belonging to nobody — and a TestDaF Saturday reading
+"pages 24-26" beside a Sunday reading "pages 22-24", apparently walking
+backwards.
+
+The chunk generator was never at fault; it walks a cursor and always has. The
+fault was that a **forward plan was persisted and then read on a later day than
+it was written**. Friday passed without anyone opening the app, no write
+happened, so nothing re-planned, and Saturday was still serving the row a build
+from two days earlier had laid down.
+
+- **A day that merely passes now re-plans.** `rebuild_schedule` was reachable
+  only from write paths. `engine.needs_replan` + `Goal.replanned_on` gate a
+  catch-up to once per day per mission, on read.
+- **An upcoming row's range is derived at read time**, from the mission's live
+  position, in one pass over one cursor (`engine.derive_descriptions`). Every
+  read path goes through one `_display()` helper, so `/today` and `/calendar`
+  can no longer disagree about the same task.
+- **`POST /today/more` is gone.** It moved rows between days by reassigning
+  `date`, which is how work landed on a Saturday the owner had declared a
+  zero-hour day, carrying a range computed for a different date. Doing more than
+  planned is already said properly by logging more than planned.
+- **A day already reported on cannot receive a second generated row.**
+- **`rebuild_schedule` flushes first.** The session runs with `autoflush=False`,
+  so logging a *future* day from the calendar panel deleted the row being
+  edited. Pre-existing since future-day editing shipped; found by the new tests.
+- **Labels split three ways**: `— missed` (never opened), `— logged none`
+  (reported zero), `logged 1 of 3 pages` (reported partial). "not done" was read
+  as a quantity.
+
+### Phase 1 of the pivot
+
+Time is the scheduling currency; units are presentation. Feasibility is a
+property of the student, not of a mission — one capacity pool, all missions
+competing in it.
+
+- **`app/services/planner.py`** — a pure module, no DB or HTTP:
+  `plan(missions, capacity, history, today) -> Plan`. Five stages: demand,
+  effective capacity, allocation, feasibility, schedule. Every tunable lives in
+  `app/services/params.py`; `app/services/adapter.py` is the only place the ORM
+  meets it.
+- **A verdict before anything is written.** `POST /plan/preview` plans a mission
+  that does not exist yet *alongside* the ones that do. The reality-check screen
+  sits between the last onboarding question and creation, states the projected
+  finish date, pre-selects the honest option, and never blocks — "start anyway"
+  sets `launched_over_capacity`.
+- **`ExecutionRecord` records what happened. There is no `PENDING`.** A row is
+  written when its day arrives or is reported on, never ahead: a persisted
+  forward plan is exactly what caused the bug above. `actual_minutes` is the
+  first measurement this product has ever taken of how long work really takes.
+- **Projected finish replaces 7% / 19% / 37%.** A date can be checked against a
+  calendar; a percentage cannot be checked against anything.
+- **Missed days are absorbed in silence** below a 15% rise in daily load, and
+  surfaced once, for acknowledgment, above it.
+- **Tone.** No WARNING, no WILL, no capitals. The number is enough.
+- **Timezone is stored per student** (`User.timezone`, IANA). "Today" was the
+  server's date — UTC on Vercel — so a Berlin student between midnight and 02:00
+  was served yesterday. Phase 1 stacks four more date-triggered behaviours on
+  that boundary, so it had to move first.
+- **Availability is validated.** Those hours were relative weights the engine
+  normalised away; they are now real capacity the verdict divides by.
+
+### Gates
+
+`smoke_test_replan.py` (18), `smoke_test_planner.py` (39), `smoke_test_golden.py`
+(the owner's two real missions, pinned), `smoke_test_feasibility.py` (33).
+Backend 11/11 suites. Both browser suites carry the reality-check screen and no
+longer pin their rest days to the weekend — that made the core-loop suite fail
+every Saturday for reasons unrelated to the product.
+
 ## 2026-08-12 — a logged zero is a real answer
 
 Found by the owner using the product on his own TestDAF and EGE maths missions.

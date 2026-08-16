@@ -1,11 +1,36 @@
 # Verification
 
-_How work on GoalAssist gets proven. Last updated 2026-08-07._
+_How work on GoalAssist gets proven. Last updated 2026-08-15._
 
 The ranked plan lives at the top of `PROJECT_STATE.md`. This file says what
 "done" means for each remaining item, and what has to pass before anything is
 committed. It is written **before** the items are built on purpose — a gate
 agreed after the fact is not a gate.
+
+## The gate as of 2026-08-15
+
+Eleven backend suites, 354 checks, one command each. Two browser suites, 79
+checks, `npm run verify`. All of it has to be green before anything is committed.
+
+| Suite | What it holds |
+|---|---|
+| `smoke_test_replan.py` | A day that passes unreported re-plans; upcoming ranges are contiguous and monotone; a day already reported on gets no second row; nothing lands on a zero-hour day; the catch-up runs once a day, not once a read |
+| `smoke_test_planner.py` | The engine alone, no database. Cases 11-18 from the pivot plan, the cursor invariant, and acceptance scenarios A and B |
+| `smoke_test_feasibility.py` | The same through HTTP: a verdict before anything is written, launching over capacity recorded rather than refused, and one `ExecutionRecord` per reported day carrying `actual_minutes` |
+| `smoke_test_golden.py` | The owner's two real missions, pinned. Any change to the plan they produce shows up as a named diff |
+
+**On the golden file.** It exists because the pivot rewrites the scheduler and
+the only honest way to know a rewrite preserves what worked is to record what the
+current engine says about real data and diff every version against it. It is
+date-stable — every call takes an explicit `today`, never `date.today()` — so a
+diff always means a behaviour change rather than the calendar moving. Re-record
+with `--update` **only** after reading the diff; a broken run must never be able
+to install itself as the new baseline.
+
+**On weekday independence.** Both browser suites used to pin their rest days to
+Sat/Sun while asserting that today holds work. That made the core-loop suite fail
+every weekend for reasons that said nothing about the product. Rest days are now
+chosen relative to today.
 
 ## Why this exists
 

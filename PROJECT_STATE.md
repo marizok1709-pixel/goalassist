@@ -1,6 +1,6 @@
 # GoalAssist — Project State (handoff)
 
-_Last updated: 2026-08-07. Read this first when resuming work._
+_Last updated: 2026-08-15. Read this first when resuming work._
 
 > **How work gets proven now lives in `VERIFICATION.md`** — the standing
 > pre-commit gate, a written gate for each remaining plan item, the post-deploy
@@ -8,6 +8,45 @@ _Last updated: 2026-08-07. Read this first when resuming work._
 > 5 or 6.
 
 ## ▶️ RESUME HERE (next session)
+
+### 2026-08-15 — the pivot's Phase 1 is in the tree, NOT deployed
+
+Two pieces of work, in this order.
+
+**1. The scheduler correctness bug (Aug-15 report).** The calendar showed a
+Friday owing 139 Stepik points beside a Saturday starting at 246, and a TestDaF
+Saturday reading "pages 24-26" beside a Sunday reading "pages 22-24". Neither was
+a chunk-generator defect — that walks a cursor and always has. Both came from
+*persisting a forward plan and reading it on a later day than it was written*.
+Fixed: a day-turn replan gated by `Goal.replanned_on`; ranges derived at read
+time (`engine.derive_descriptions`); `POST /today/more` deleted (it moved rows
+between days without re-planning, which is how work landed on a zero-hour
+Saturday); a guard so a day already reported on cannot receive a second
+generated row; and `rebuild_schedule` now flushes first — with `autoflush=False`,
+logging a *future* day from the calendar used to delete the row being edited.
+
+**2. Phase 1 of the pivot.** Time is the scheduling currency; feasibility is a
+property of the student, not of a mission. New pure module
+`app/services/planner.py` (`plan(missions, capacity, history, today) -> Plan`),
+tunables in `app/services/params.py`, ORM bridge in `app/services/adapter.py`.
+`POST /plan/preview` answers "does this fit?" *before* anything is written, and
+the reality-check screen sits between the last onboarding question and creation.
+`ExecutionRecord` records what happened — **there is no PENDING**; a row is
+written when its day arrives or is reported on, never ahead, because a persisted
+forward plan is exactly what caused (1).
+
+**Owner decisions taken 2026-08-15:** forward plan derived, never persisted ·
+weekly floor of one study slot per active mission · `minutes_per_unit` nullable
+with a units-per-hour fallback, no invented seed values.
+
+**This supersedes two earlier decisions recorded below** (2026-08-06): *"engine
+stays feature-frozen"* and *per-task time estimates* in the cut-until-retention
+list. The pivot is the newer call; the older lines stay for the record.
+
+**Still to do by hand:** deploy the backend before the frontend (the additive
+migration adds `users.timezone`, `goals.priority` / `launched_over_capacity` /
+`acknowledged_load` / `replanned_on`, `materials.minutes_per_unit` and the
+`execution_records` table on cold start). Nothing is committed yet.
 
 ### 2026-08-12 — the logging bug is fixed in the tree, NOT deployed
 
