@@ -42,12 +42,15 @@ export default function TodayPage() {
   const router = useRouter();
   const [data, setData] = useState<Today | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
-  const [pullingMore, setPullingMore] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [praise, setPraise] = useState<string | null>(null);
   const [whyOpen, setWhyOpen] = useState<number | null>(null);
   const [logOpen, setLogOpen] = useState<number | null>(null);
   const [logValue, setLogValue] = useState("");
+  // How long it took. Optional on purpose — a student who does not answer must
+  // not be blocked — but it is the only measurement of real pace the product
+  // ever takes, and without it calibration has nothing to calibrate from.
+  const [logMinutes, setLogMinutes] = useState("");
 
   const load = useCallback(() => api.today().then(setData).catch(() => {}), []);
 
@@ -72,10 +75,19 @@ export default function TodayPage() {
   const doneCount = allTasks.length - openTasks.length;
   const dayComplete = allTasks.length > 0 && openTasks.length === 0;
 
-  async function finishTask(task: ScheduledTask, completed: boolean, actual?: number) {
+  async function finishTask(
+    task: ScheduledTask,
+    completed: boolean,
+    actual?: number,
+    minutes?: number
+  ) {
     setBusy(task.id);
     try {
-      const res = await api.updateTask(task.id, { completed, actual_quantity: actual });
+      const res = await api.updateTask(task.id, {
+        completed,
+        actual_quantity: actual,
+        actual_minutes: minutes,
+      });
       analytics.track(actual === undefined ? "task_completed" : "task_logged", { completed });
       setFlash(res.message);
       const fresh = await api.today();
@@ -95,6 +107,7 @@ export default function TodayPage() {
       return;
     }
     setLogValue(String(task.quantity));
+    setLogMinutes(task.minutes ? String(Math.round(task.minutes)) : "");
     setLogOpen(task.id);
     setWhyOpen(null);
   }
@@ -102,19 +115,11 @@ export default function TodayPage() {
   function submitLog(task: ScheduledTask) {
     const value = Number(logValue);
     if (logValue.trim() === "" || Number.isNaN(value) || value < 0) return;
+    const mins = Number(logMinutes);
+    const minutes =
+      logMinutes.trim() === "" || Number.isNaN(mins) || mins < 0 ? undefined : mins;
     setLogOpen(null);
-    finishTask(task, true, value);
-  }
-
-  async function borrowTomorrow() {
-    setPullingMore(true);
-    setPraise(null);
-    setFlash(null);
-    try {
-      setData(await api.todayMore());
-    } finally {
-      setPullingMore(false);
-    }
+    finishTask(task, true, value, minutes);
   }
 
   return (
@@ -140,13 +145,6 @@ export default function TodayPage() {
               Rest day, or no missions yet. Staying ahead is always allowed.
             </p>
             <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-              <button
-                onClick={borrowTomorrow}
-                disabled={pullingMore}
-                className="ob-btn w-full rounded-2xl px-6 py-3 text-sm font-semibold disabled:opacity-50 sm:w-auto"
-              >
-                {pullingMore ? "…" : "Borrow tomorrow's work"}
-              </button>
               <Link href="/missions/new" className="py-2 text-sm text-ink-2 hover:text-ink">
                 + New mission
               </Link>
@@ -164,14 +162,9 @@ export default function TodayPage() {
               {doneCount} {doneCount === 1 ? "task" : "tasks"} completed
             </p>
             <div className="mt-5">
-              <p className="text-sm text-ink-2">Feeling good?</p>
-              <button
-                onClick={borrowTomorrow}
-                disabled={pullingMore}
-                className="ob-btn mt-2 rounded-2xl px-6 py-2.5 text-sm font-semibold disabled:opacity-50"
-              >
-                {pullingMore ? "…" : "Borrow tomorrow's work"}
-              </button>
+              <p className="text-sm text-ink-2">
+                Feeling good? Log more than the day asked for and the rest of your week shrinks.
+              </p>
             </div>
           </div>
         )}
@@ -223,6 +216,14 @@ export default function TodayPage() {
                           <span className={t.completed ? "text-ink-muted line-through" : "text-ink"}>
                             {t.description}
                           </span>
+                          {/* Time, not just amount. "Three pages" is a quantity;
+                              "three pages, about 18 minutes" is something a
+                              student can fit into an actual evening. */}
+                          {t.minutes > 0 && !t.completed && (
+                            <span className="ml-2 text-[11px] text-ink-muted tnum">
+                              ~{Math.round(t.minutes)} min
+                            </span>
+                          )}
                           {/* A reported day that is not a finished day. Without
                               this the row is indistinguishable from one nobody
                               has touched, which is how a logged zero used to
@@ -274,6 +275,7 @@ export default function TodayPage() {
                               type="number"
                               inputMode="decimal"
                               min="0"
+                              aria-label="How much did you do?"
                               value={logValue}
                               onChange={(e) => setLogValue(e.target.value)}
                               onKeyDown={(e) => {
@@ -282,6 +284,23 @@ export default function TodayPage() {
                               }}
                               className="ob-glass w-28 rounded-xl px-4 py-2 text-center text-sm text-ink tnum"
                             />
+                            <label className="flex items-center gap-2 text-[13px] text-ink-2">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min="0"
+                                placeholder="min"
+                                aria-label="How long did it take, in minutes?"
+                                value={logMinutes}
+                                onChange={(e) => setLogMinutes(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") submitLog(t);
+                                  if (e.key === "Escape") setLogOpen(null);
+                                }}
+                                className="ob-glass w-20 rounded-xl px-3 py-2 text-center text-sm text-ink tnum"
+                              />
+                              min
+                            </label>
                             <button
                               onClick={() => submitLog(t)}
                               disabled={busy === t.id || logValue.trim() === "" || Number(logValue) < 0 || Number.isNaN(Number(logValue))}

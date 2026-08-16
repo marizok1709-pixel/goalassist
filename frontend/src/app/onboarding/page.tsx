@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import { api, ApiError, setToken } from "@/lib/api";
+import { api, ApiError, Feasibility, setToken } from "@/lib/api";
 import { DarkNav, DayChip } from "@/components/darkchrome";
 import { TextField } from "@/components/textfield";
+import { RealityCheck } from "@/components/reality-check";
 import { DAYS, STUDY_DAY_HOURS } from "@/components/ui";
 import { analytics } from "@/lib/analytics";
 
@@ -27,6 +28,7 @@ type Step =
   | "materials"
   | "howfar"
   | "rhythm"
+  | "reality"
   | "building"
   | "launch";
 
@@ -38,6 +40,7 @@ const STEP_ORDER: Step[] = [
   "materials",
   "howfar",
   "rhythm",
+  "reality",
   "building",
   "launch",
 ];
@@ -77,6 +80,7 @@ interface MaterialDraft {
   id: number; // stable across re-renders so uncontrolled inputs keep their text
   name: string;
   amount: string; // total_quantity
+  minutes: string; // minutes_per_unit, blank = no estimate yet
   unit: string;
   done: string; // already_completed
 }
@@ -88,6 +92,7 @@ const newMaterial = (): MaterialDraft => ({
   amount: "",
   unit: "pages",
   done: "",
+  minutes: "",
 });
 
 interface Launched {
@@ -137,6 +142,41 @@ export default function OnboardingPage() {
 
   const namedMaterials = materials.filter((m) => m.name.trim() && Number(m.amount) > 0);
 
+  // The verdict, and whether the student overrode it. Held in local state
+  // because none of this exists on the server yet — that is the whole point of
+  // asking before creating.
+  const [feasibility, setFeasibility] = useState<Feasibility | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [overCapacity, setOverCapacity] = useState(false);
+
+  async function runRealityCheck() {
+    setChecking(true);
+    setError("");
+    try {
+      const result = await api.previewPlan({
+        title: title.trim(),
+        deadline,
+        materials: namedMaterials.map((m) => ({
+          name: m.name.trim(),
+          total_quantity: Number(m.amount),
+          unit: m.unit.trim() || "units",
+          already_completed: Number(m.done) || 0,
+          minutes_per_unit: Number(m.minutes) || null,
+        })),
+        availability: availabilityFrom(restDays),
+      });
+      setFeasibility(result);
+      navigate("reality");
+    } catch (err) {
+      // A verdict we cannot fetch must not block the mission. Fall through to
+      // creation rather than stranding the student on a dead step.
+      setError(err instanceof ApiError ? err.message : "");
+      navigate("building");
+    } finally {
+      setChecking(false);
+    }
+  }
+
   // ----- account -----
   async function register() {
     if (!account.username.trim() || !account.email.trim() || account.password.length < 8) {
@@ -173,7 +213,11 @@ export default function OnboardingPage() {
         // correctly instead of being built wrong and immediately rebuilt.
         await api.updateMe({ availability: availabilityFrom(restDays) });
         analytics.track("availability_saved", { from: "onboarding", rest_days: restDays.size });
-        const goal = await api.createGoal({ title: title.trim(), deadline });
+        const goal = await api.createGoal({
+          title: title.trim(),
+          deadline,
+          launched_over_capacity: overCapacity,
+        });
         const remaining: Launched["remaining"] = [];
         for (const m of namedMaterials) {
           const total = Number(m.amount);
@@ -183,6 +227,7 @@ export default function OnboardingPage() {
             total_quantity: total,
             unit: m.unit.trim() || "units",
             already_completed: done,
+            minutes_per_unit: Number(m.minutes) || undefined,
           });
           remaining.push({ name: m.name.trim(), amount: Math.max(total - done, 0), unit: m.unit.trim() || "units" });
         }
@@ -437,6 +482,20 @@ export default function OnboardingPage() {
                       value={m.done}
                       onChange={(e) => setMat(idx, "done", e.target.value)}
                     />
+                    {/* Optional. Skipping it is a real answer: without minutes
+                        the plan states a required rate instead of a finish
+                        date, which is honest rather than broken. Asking here
+                        rather than on its own step keeps the flow at five
+                        questions. */}
+                    <input
+                      className="ob-glass mt-2 w-full rounded-full px-5 py-3 text-center text-sm text-ink sm:px-8"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      placeholder={`minutes per ${m.unit.replace(/s$/, "") || "unit"} (optional)`}
+                      value={m.minutes}
+                      onChange={(e) => setMat(idx, "minutes", e.target.value)}
+                    />
                   </div>
                 );
               })}
@@ -480,11 +539,36 @@ export default function OnboardingPage() {
             {error && <ErrorLine msg={error} />}
             <StepButtons
               onBack={() => navigate("howfar")}
-              onNext={() => studyDays > 0 && navigate("building")}
-              disabled={studyDays === 0}
-              label="Build my plan →"
+              onNext={() => studyDays > 0 && runRealityCheck()}
+              disabled={studyDays === 0 || checking}
+              label={checking ? "…" : "Check my plan →"}
             />
           </>
+        );
+
+      case "reality":
+        if (!feasibility) return null;
+        return (
+          <RealityCheck
+            result={feasibility}
+            onBack={() => navigate("rhythm")}
+            onContinue={(choice) => {
+              // Only "start anyway" is a decision to record. The others change
+              // an answer, so they send the student back to the question that
+              // produced it — nothing has been written, so going back is free.
+              if (choice.kind === "deadline") {
+                setDeadline(choice.deadline);
+                navigate("deadline");
+              } else if (choice.kind === "scope") {
+                navigate("materials");
+              } else if (choice.kind === "hours") {
+                navigate("rhythm");
+              } else {
+                setOverCapacity(feasibility.verdict === "OVER_CAPACITY");
+                navigate("building");
+              }
+            }}
+          />
         );
 
       case "building":

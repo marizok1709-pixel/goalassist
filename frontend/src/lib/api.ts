@@ -1,5 +1,18 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * The browser's IANA zone, e.g. "Europe/Berlin". Undefined rather than a guess
+ * when the runtime cannot say — the server treats that as "use the server
+ * clock", which is the old behaviour and safe.
+ */
+export function browserTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------- Types (mirror backend schemas) ----------
 
 export interface User {
@@ -15,6 +28,8 @@ export interface User {
    * rest-day answer leaves it false, which is what the dashboard nudge keys on.
    */
   availability_refined?: boolean;
+  /** IANA zone captured at register. Null on accounts that predate it. */
+  timezone?: string | null;
   /** Read-only operator flag. Set only via backend/make_admin.py. */
   is_admin?: boolean;
 }
@@ -30,6 +45,9 @@ export interface Goal {
   start_date: string;
   status: GoalStatus;
   created_at: string;
+  priority?: "HIGH" | "NORMAL" | "PAUSED";
+  /** The student was told this did not fit and started anyway. */
+  launched_over_capacity?: boolean;
 }
 
 export interface Material {
@@ -39,6 +57,8 @@ export interface Material {
   type: string | null;
   total_quantity: number;
   unit: string;
+  /** How long one unit takes this student. Null = never measured. */
+  minutes_per_unit?: number | null;
 }
 
 export interface ProgressUnit {
@@ -85,6 +105,43 @@ export interface RealityReport {
   status: TrajectoryStatus;
   message: string;
   adjustments: string[];
+  /** COMFORTABLE | FEASIBLE | TIGHT | OVER_CAPACITY | NO_ESTIMATE | COMPLETED */
+  verdict: Verdict;
+  /** The headline. Null when no minutes estimate exists — a date without
+   *  measured minutes behind it would be a guess wearing arithmetic. */
+  projected_finish: string | null;
+  days_late: number;
+  required_units_per_hour: number | null;
+  pace_planned_units: number;
+  pace_actual_units: number | null;
+  minutes_today: number;
+  /** The daily ask has grown past what the student last acknowledged. */
+  load_changed: boolean;
+}
+
+export type Verdict =
+  | "COMFORTABLE"
+  | "FEASIBLE"
+  | "TIGHT"
+  | "OVER_CAPACITY"
+  | "NO_ESTIMATE"
+  | "COMPLETED";
+
+/** The answer to "does this fit?", for a mission that does not exist yet. */
+export interface Feasibility {
+  verdict: Verdict;
+  projected_finish: string | null;
+  deadline: string;
+  days_late: number;
+  required_minutes: number;
+  available_minutes: number;
+  daily_cap_minutes: number;
+  required_units_per_hour: number | null;
+  uses_minutes: boolean;
+  suggested_deadline: string | null;
+  suggested_scope: { unit: string; units: number; of: number } | null;
+  suggested_weekly_hours: number | null;
+  competing_missions: string[];
 }
 
 export interface Plan {
@@ -106,6 +163,8 @@ export interface ScheduledTask {
    *  including a deliberate 0. Never derive it from `completed`. */
   actual_quantity: number | null;
   why: string | null;
+  /** Expected minutes for this slice. 0 when the material has no estimate. */
+  minutes: number;
 }
 
 export interface CalendarTask extends ScheduledTask {
@@ -299,7 +358,11 @@ export const api = {
   }) =>
     request<{ access_token: string; user: User }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify(data),
+      // "Today" has to mean the student's today. The API runs in UTC, so
+      // without this a Berlin student between midnight and 02:00 is served
+      // yesterday. Sent once, at the only moment we are certainly in their
+      // browser; the server ignores anything it cannot resolve.
+      body: JSON.stringify({ ...data, timezone: browserTimezone() }),
     }),
 
   login: (email: string, password: string) =>
@@ -319,6 +382,7 @@ export const api = {
     year?: number;
     availability?: Record<string, number>;
     availability_refined?: boolean;
+    timezone?: string;
   }) => request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(data) }),
 
   createGoal: (data: {
@@ -327,7 +391,27 @@ export const api = {
     category?: string;
     deadline: string;
     start_date?: string;
+    priority?: "HIGH" | "NORMAL" | "PAUSED";
+    launched_over_capacity?: boolean;
   }) => request<Goal>("/goals", { method: "POST", body: JSON.stringify(data) }),
+
+  /** Does this fit? Asked before anything is written. */
+  previewPlan: (data: {
+    title?: string;
+    deadline: string;
+    materials: {
+      name: string;
+      total_quantity: number;
+      unit: string;
+      already_completed?: number;
+      minutes_per_unit?: number | null;
+    }[];
+    availability?: Record<string, number>;
+  }) => request<Feasibility>("/plan/preview", { method: "POST", body: JSON.stringify(data) }),
+
+  /** "I have seen that the plan got heavier." Resets the quiet threshold. */
+  acknowledgeLoad: (goalId: number) =>
+    request<{ ok: boolean }>(`/goals/${goalId}/acknowledge`, { method: "POST" }),
 
   deleteGoal: (goalId: number) =>
     request<void>(`/goals/${goalId}`, { method: "DELETE" }),
@@ -343,6 +427,8 @@ export const api = {
       total_quantity: number;
       unit: string;
       already_completed?: number;
+      /** How long one unit takes this student. Omitted = no estimate yet. */
+      minutes_per_unit?: number;
     }
   ) =>
     request<Material>(`/goals/${goalId}/materials`, {
@@ -405,12 +491,15 @@ export const api = {
 
   today: () => request<Today>("/today"),
 
-  todayMore: () => request<Today>("/today/more", { method: "POST" }),
 
   calendar: (start: string, end: string) =>
     request<CalendarTask[]>(`/calendar?start=${start}&end=${end}`),
 
-  updateTask: (taskId: number, data: { completed: boolean; actual_quantity?: number }) =>
+  updateTask: (
+    taskId: number,
+    // actual_minutes is the only measurement of real pace the product takes.
+    data: { completed: boolean; actual_quantity?: number; actual_minutes?: number }
+  ) =>
     request<{ task: ScheduledTask; overshoot: number; message: string | null }>(
       `/tasks/${taskId}`,
       { method: "PATCH", body: JSON.stringify(data) }

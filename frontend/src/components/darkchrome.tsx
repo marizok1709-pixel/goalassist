@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { api, clearToken, getToken, TrajectoryStatus } from "@/lib/api";
+import { api, clearToken, getToken, TrajectoryStatus, Verdict } from "@/lib/api";
 import { analytics } from "@/lib/analytics";
 
 /**
@@ -389,6 +389,89 @@ export function DarkStatusBadge({ status }: { status: TrajectoryStatus }) {
       <span aria-hidden>{s.icon}</span>
       {s.label}
     </span>
+  );
+}
+
+// The planner's bands. Named for the lever rather than the diagnosis — "over
+// capacity" tells a student what to change, "infeasible" tells them to give up.
+// Deliberately quieter than the old status words: the headline is a date now,
+// and a badge that shouts next to a date the student can check reads as noise.
+const VERDICT_BADGE: Record<Verdict, { label: string; cls: string }> = {
+  COMFORTABLE: { label: "comfortable", cls: "text-good" },
+  FEASIBLE: { label: "on track", cls: "text-good" },
+  TIGHT: { label: "tight", cls: "text-warn" },
+  OVER_CAPACITY: { label: "over capacity", cls: "text-warn" },
+  NO_ESTIMATE: { label: "no time estimate", cls: "text-ink-muted" },
+  COMPLETED: { label: "complete", cls: "text-good" },
+};
+
+export function DarkVerdictBadge({ verdict }: { verdict: Verdict }) {
+  const v = VERDICT_BADGE[verdict] ?? VERDICT_BADGE.NO_ESTIMATE;
+  return (
+    <span className={`text-xs font-semibold uppercase tracking-widest ${v.cls}`}>{v.label}</span>
+  );
+}
+
+/**
+ * Deadline against projected finish.
+ *
+ * Replaces the actual-vs-expected percentage bar. That bar answered "how much
+ * of the book have you read", which is only interesting as a proxy for the
+ * question the student actually has — *will I make it?* — and a bad proxy,
+ * because it says nothing about the time left. This one answers it directly:
+ * the deadline is the marker, the projection is the fill, and overshooting is
+ * visible as overshoot rather than as a number below another number.
+ */
+export function DarkFinishBar({
+  startDate,
+  deadline,
+  projectedFinish,
+}: {
+  startDate: string;
+  deadline: string;
+  projectedFinish: string | null;
+}) {
+  // Everything here comes from props. Reading the clock during render makes the
+  // component impure — and the bar has nothing to say about "now" anyway: the
+  // projection is the claim, and the projection already accounts for today.
+  const day = (iso: string) => new Date(`${iso}T00:00:00`).getTime();
+  const start = day(startDate);
+  const due = day(deadline);
+  const finish = projectedFinish ? day(projectedFinish) : null;
+  // Scale to whichever is further out, so a late projection has room to show.
+  const end = Math.max(due, finish ?? due);
+  const span = Math.max(end - start, 1);
+  const pct = (t: number) => Math.max(0, Math.min(100, ((t - start) / span) * 100));
+  const late = finish !== null && finish > due;
+
+  return (
+    <div>
+      <div className="relative h-2 overflow-hidden rounded-full bg-veil/10">
+        <div
+          className={`absolute inset-y-0 left-0 rounded-full ${late ? "bg-warn" : "bg-accent"}`}
+          style={{ width: `${finish === null ? 0 : pct(finish)}%` }}
+        />
+        <div
+          className="absolute inset-y-0 w-0.5 bg-veil/70"
+          style={{ left: `calc(${pct(due)}% - 1px)` }}
+          title={`Deadline: ${deadline}`}
+        />
+      </div>
+      <div className="mt-1.5 flex justify-between text-[11px] text-ink-muted">
+        <span>
+          {projectedFinish ? (
+            <>
+              finishes <span className={`tnum ${late ? "text-warn" : "text-ink-2"}`}>{projectedFinish}</span>
+            </>
+          ) : (
+            "no finish date yet"
+          )}
+        </span>
+        <span>
+          due <span className="tnum">{deadline}</span>
+        </span>
+      </div>
+    </div>
   );
 }
 

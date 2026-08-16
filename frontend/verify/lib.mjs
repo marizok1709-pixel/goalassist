@@ -200,7 +200,10 @@ export function sleep(ms) {
  *
  * `restDays` are labels as rendered on the rhythm step ("Sat", "Sun").
  */
-export async function onboard(page, { title, days = 12, material, amount, unit, restDays = [] }) {
+export async function onboard(
+  page,
+  { title, days = 12, material, amount, unit, restDays = [], onVerdict = null }
+) {
   const account = { email: uniqueEmail(), password: "verifypass1", name: "Verify" };
 
   await page.goto(`${FRONTEND}/onboarding`, { waitUntil: "networkidle2" });
@@ -244,7 +247,14 @@ export async function onboard(page, { title, days = 12, material, amount, unit, 
 
   await waitForText(page, "Which days do you not study?");
   for (const day of restDays) await clickText(page, day, '[role="switch"]');
-  await clickText(page, "Build my plan →");
+  await clickText(page, "Check my plan →");
+
+  // The reality check now sits between the last question and creation: the
+  // verdict has to arrive before anything is written. Nothing is persisted
+  // until "Create mission" is pressed here.
+  await waitForText(page, "Create mission", 20000);
+  if (onVerdict) await onVerdict(page);
+  await clickText(page, "Create mission");
 
   await waitForText(page, "Mission created", 20000);
   return account;

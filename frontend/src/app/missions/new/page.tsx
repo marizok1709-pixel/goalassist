@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion } from "motion/react";
-import { api, ApiError } from "@/lib/api";
+import { Feasibility, api, ApiError } from "@/lib/api";
+import { RealityCheck } from "@/components/reality-check";
 import { DarkShell } from "@/components/darkchrome";
 import { TextField } from "@/components/textfield";
 import { Field, glassInput } from "@/components/ui";
@@ -14,6 +15,7 @@ interface MaterialDraft {
   total_quantity: string;
   unit: string;
   already_completed: string;
+  minutes_per_unit: string;
 }
 
 let draftSeq = 0;
@@ -23,6 +25,7 @@ const newMaterial = (): MaterialDraft => ({
   total_quantity: "",
   unit: "pages",
   already_completed: "",
+  minutes_per_unit: "",
 });
 
 interface Launched {
@@ -42,6 +45,12 @@ export default function NewMissionPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [launched, setLaunched] = useState<Launched | null>(null);
+  // The verdict, held before anything is written. Same gate as onboarding —
+  // a student who reaches creation from inside the app must get the same
+  // answer as one who reaches it from the front door.
+  const [feasibility, setFeasibility] = useState<Feasibility | null>(null);
+
+  const validMaterials = materials.filter((m) => m.name && Number(m.total_quantity) > 0);
 
   function setMat(i: number, field: keyof MaterialDraft, value: string) {
     setMaterials(materials.map((m, j) => (j === i ? { ...m, [field]: value } : m)));
@@ -52,7 +61,32 @@ export default function NewMissionPage() {
     setBusy(true);
     setError("");
     try {
+      const result = await api.previewPlan({
+        title,
+        deadline,
+        materials: validMaterials.map((m) => ({
+          name: m.name,
+          total_quantity: Number(m.total_quantity),
+          unit: m.unit || "units",
+          already_completed: Number(m.already_completed) || 0,
+          minutes_per_unit: Number(m.minutes_per_unit) || null,
+        })),
+      });
+      setFeasibility(result);
+      setBusy(false);
+      return;
+    } catch {
+      // A verdict we cannot fetch must not stop the mission being created.
+    }
+    await create(false);
+  }
+
+  async function create(anyway: boolean) {
+    setBusy(true);
+    setError("");
+    try {
       const goal = await api.createGoal({
+        launched_over_capacity: anyway,
         title,
         category: category || undefined,
         deadline,
@@ -66,6 +100,7 @@ export default function NewMissionPage() {
           total_quantity: Number(m.total_quantity),
           unit: m.unit || "units",
           already_completed: m.already_completed ? Number(m.already_completed) : undefined,
+          minutes_per_unit: m.minutes_per_unit ? Number(m.minutes_per_unit) : undefined,
         });
         remaining.push({
           amount: Number(m.total_quantity) - (Number(m.already_completed) || 0),
@@ -84,6 +119,33 @@ export default function NewMissionPage() {
       setError(err instanceof ApiError ? err.message : "Cannot reach the server");
       setBusy(false);
     }
+  }
+
+  if (feasibility && !launched) {
+    return (
+      <DarkShell>
+        <div className="pt-10 sm:pt-16">
+          <RealityCheck
+            result={feasibility}
+            busy={busy}
+            onBack={() => setFeasibility(null)}
+            onContinue={(choice) => {
+              if (choice.kind === "deadline") {
+                setDeadline(choice.deadline);
+                setFeasibility(null);
+              } else if (choice.kind === "scope" || choice.kind === "hours") {
+                // Both are answers to change, and both live on this form or at
+                // /timing. Send them back rather than editing behind their back.
+                setFeasibility(null);
+              } else {
+                create(true);
+              }
+            }}
+          />
+          {error && <p className="mt-4 text-center text-sm text-bad">{error}</p>}
+        </div>
+      </DarkShell>
+    );
   }
 
   // The emotional moment: the mission exists, the plan is ready.
@@ -212,7 +274,7 @@ export default function NewMissionPage() {
               {materials.map((m, i) => (
                 <div
                   key={m.id}
-                  className="grid grid-cols-[1fr_1fr_1fr_32px] items-end gap-2 sm:grid-cols-[1fr_80px_90px_80px_32px]"
+                  className="grid grid-cols-[1fr_1fr_1fr_32px] items-end gap-2 sm:grid-cols-[1fr_80px_90px_70px_70px_32px]"
                 >
                   <label className="col-span-4 block sm:col-span-1">
                     {i === 0 && <span className="mb-1 block text-[11px] text-ink-muted">Name</span>}
@@ -258,6 +320,24 @@ export default function NewMissionPage() {
                       aria-label={`Material ${i + 1} already done`}
                       value={m.already_completed}
                       onChange={(e) => setMat(i, "already_completed", e.target.value)}
+                    />
+                  </label>
+                  {/* Optional, and left blank rather than guessed. Without it we
+                      can state a required rate but not a finish date — which is
+                      the honest answer, not a broken one. */}
+                  <label className="block">
+                    {i === 0 && (
+                      <span className="mb-1 block text-[11px] text-ink-muted">Min each</span>
+                    )}
+                    <input
+                      className={glassInput}
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      placeholder="—"
+                      aria-label={`Material ${i + 1} minutes per unit`}
+                      value={m.minutes_per_unit}
+                      onChange={(e) => setMat(i, "minutes_per_unit", e.target.value)}
                     />
                   </label>
                   <button

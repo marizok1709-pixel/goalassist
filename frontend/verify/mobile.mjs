@@ -28,6 +28,11 @@ import {
   sleep,
 } from "./lib.mjs";
 
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TODAY_IDX = (new Date().getDay() + 6) % 7; // JS Sunday=0 → Monday=0
+const REST_DAYS = [DAY_LABELS[(TODAY_IDX + 2) % 7], DAY_LABELS[(TODAY_IDX + 3) % 7]];
+
+
 // The floors the mobile pass actually shipped: 32px for inline text controls,
 // 44px for the two things the core loop depends on.
 const FLOOR = 32;
@@ -159,7 +164,10 @@ try {
     material: "Klara and the Sun",
     amount: 26,
     unit: "chapters",
-    restDays: ["Sat", "Sun"],
+    // Relative to today, never a fixed weekend: the checkbox check below needs
+    // today to actually hold a task, and pinning these to Sat/Sun made the
+    // suite fail every weekend for reasons that had nothing to do with the UI.
+    restDays: REST_DAYS,
   });
   const token = await setup.evaluate(() => localStorage.getItem("acadassist_token"));
   r.check("onboarding completes on a phone", Boolean(token), "no token in localStorage");

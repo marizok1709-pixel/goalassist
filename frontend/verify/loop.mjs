@@ -29,6 +29,16 @@ import {
   sleep,
 } from "./lib.mjs";
 
+// Two rest days that are never today, so "today has work" holds on any weekday.
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TODAY_IDX = (new Date().getDay() + 6) % 7; // JS Sunday=0 → Monday=0
+const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const REST_IDX = [(TODAY_IDX + 2) % 7, (TODAY_IDX + 3) % 7];
+const REST_DAYS = REST_IDX.map((i) => DAY_LABELS[i]);
+const REST_KEYS = REST_IDX.map((i) => DAY_KEYS[i]);
+
+
+
 const r = reporter("Core loop on a phone — onboard, plan, tick, confirm");
 
 const browser = await launch();
@@ -36,6 +46,7 @@ try {
   const page = await phonePage(browser);
 
   // ------------------------------------------------------------ onboarding
+  const verdict = { text: "", goalsBefore: -1 };
   const typedName = "Klara and the Sun";
   await onboard(page, {
     title: "Read books every day",
@@ -43,8 +54,49 @@ try {
     material: typedName,
     amount: 26,
     unit: "chapters",
-    restDays: ["Sat", "Sun"],
+    // Rest days chosen *relative to today*, never a fixed Sat/Sun. The suite
+    // asserts that today has work in it, so pinning the rest days to the
+    // weekend made the whole core-loop check fail every Saturday and Sunday —
+    // a red suite that says nothing about the product.
+    restDays: REST_DAYS,
+    // The verdict screen is the moment the product's claim is either earned or
+    // lost, so it is checked in place rather than clicked through.
+    onVerdict: async (p) => {
+      const body = await p.evaluate(() => document.body.innerText);
+      verdict.text = body;
+      verdict.goalsBefore = await p.evaluate(async () => {
+        const t = localStorage.getItem("acadassist_token");
+        const res = await fetch("http://localhost:8000/goals", {
+          headers: { Authorization: `Bearer ${t}` },
+        });
+        return (await res.json()).length;
+      });
+    },
   });
+
+  r.check(
+    "the verdict arrives before the mission is created",
+    verdict.goalsBefore === 0,
+    `${verdict.goalsBefore} goals already existed`
+  );
+  r.check(
+    "it shows the assumption that decides the verdict",
+    /a day of new material/i.test(verdict.text),
+    verdict.text.slice(0, 300)
+  );
+  r.check(
+    "it states a verdict in words, not just numbers",
+    /(fits|doesn't fit|tight|no time estimate)/i.test(verdict.text),
+    verdict.text.slice(0, 300)
+  );
+  r.check(
+    // Never blocking is the rule. A plan that already fits shows no
+    // alternatives — offering "cut your scope" to someone whose plan works is
+    // noise — but there is always a way forward from this screen.
+    "and there is always a way forward",
+    /Create mission/i.test(verdict.text),
+    verdict.text.slice(0, 300)
+  );
 
   // A real first-timer meets the consent banner here and answers it. Declining
   // must be a full stop, not a smaller amount of tracking — so this suite runs
@@ -84,12 +136,13 @@ try {
   r.check("onboarding produced availability", me.availability !== null, JSON.stringify(me.availability));
   r.check(
     "the chosen rest days are zero hours",
-    me.availability && me.availability.sat === 0 && me.availability.sun === 0,
+    me.availability && REST_KEYS.every((d) => me.availability[d] === 0),
     JSON.stringify(me.availability)
   );
   r.check(
     "study days are non-zero",
-    me.availability && ["mon", "tue", "wed", "thu", "fri"].every((d) => me.availability[d] > 0),
+    me.availability &&
+      DAY_KEYS.filter((d) => !REST_KEYS.includes(d)).every((d) => me.availability[d] > 0),
     JSON.stringify(me.availability)
   );
   r.check(
@@ -103,8 +156,8 @@ try {
   r.check("the dashboard reports the new mission", Boolean(missionId), JSON.stringify(dashboard).slice(0, 200));
   const schedule = await apiGet(`/goals/${missionId}/schedule?days=30`);
   const weekendTasks = schedule.filter((t) => {
-    const wd = new Date(`${t.date}T00:00:00`).getDay();
-    return wd === 0 || wd === 6;
+    const wd = (new Date(`${t.date}T00:00:00`).getDay() + 6) % 7;
+    return REST_KEYS.includes(DAY_KEYS[wd]);
   });
   r.check("nothing is scheduled on a rest day", weekendTasks.length === 0, `${weekendTasks.length} tasks`);
   r.check(

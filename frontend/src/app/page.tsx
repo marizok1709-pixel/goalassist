@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { api, Dashboard, DashboardGoal, getToken } from "@/lib/api";
-import { DarkShell, DarkStatusBadge, DarkTrajectoryBar } from "@/components/darkchrome";
+import { api, browserTimezone, Dashboard, DashboardGoal, getToken } from "@/lib/api";
+import { DarkFinishBar, DarkShell, DarkVerdictBadge } from "@/components/darkchrome";
 import { PageLoading } from "@/components/ui";
 
 function greeting(): string {
@@ -16,12 +16,14 @@ function greeting(): string {
   return "GOOD EVENING";
 }
 
+// Worst first. Ordered by the planner's verdict rather than the old trajectory
+// status, so the mission that actually needs a decision sits at the top.
 const SEVERITY: Record<string, number> = {
-  FAILED: 0,
-  OFF_TRACK: 1,
-  AT_RISK: 2,
-  ON_TRACK: 3,
-  AHEAD: 4,
+  OVER_CAPACITY: 0,
+  TIGHT: 1,
+  NO_ESTIMATE: 2,
+  FEASIBLE: 3,
+  COMFORTABLE: 4,
   COMPLETED: 5,
 };
 
@@ -34,7 +36,19 @@ export default function DashboardPage() {
       router.push("/onboarding");
       return;
     }
-    api.dashboard().then(setData).catch(() => {});
+    api
+      .dashboard()
+      .then((d) => {
+        setData(d);
+        // Accounts created before the zone was captured have none, and every
+        // date the app reasons about is theirs, not the server's. Backfill it
+        // silently on first sight; failure is harmless, the server clock stands.
+        if (!d.user.timezone) {
+          const tz = browserTimezone();
+          if (tz) api.updateMe({ timezone: tz }).catch(() => {});
+        }
+      })
+      .catch(() => {});
   }, [router]);
 
   if (!data) {
@@ -47,7 +61,7 @@ export default function DashboardPage() {
 
   const goals = [...data.goals].sort(
     (a, b) =>
-      (SEVERITY[a.reality.status] ?? 9) - (SEVERITY[b.reality.status] ?? 9) ||
+      (SEVERITY[a.reality.verdict] ?? 9) - (SEVERITY[b.reality.verdict] ?? 9) ||
       a.days_remaining - b.days_remaining
   );
   const hero = goals[0];
@@ -136,9 +150,23 @@ export default function DashboardPage() {
   );
 }
 
+// Two decimals on a headline reads as false precision — the estimate behind it
+// is nowhere near that good. Whole numbers once it is big enough to not need
+// them.
+function fmtRate(n: number): string {
+  return n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10);
+}
+
+function fmtDay(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function HeroMission({ g }: { g: DashboardGoal }) {
   const r = g.reality;
-  const progress = Math.round(r.actual_progress_pct);
 
   return (
     <motion.section
@@ -155,32 +183,55 @@ function HeroMission({ g }: { g: DashboardGoal }) {
           {g.goal.title}
         </Link>
         <span className="shrink-0 text-xs text-ink-muted">
-          {new Date(`${g.goal.deadline}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
-          · <span className="text-ink tnum">{g.days_remaining}d</span>
+          due {fmtDay(g.goal.deadline)} · <span className="text-ink tnum">{g.days_remaining}d</span>
         </span>
       </div>
 
-      {/* THE number: how much is actually done. Trajectory lives in the badge. */}
+      {/* THE number is now a date. "37% done" cannot be checked against
+          anything; "finishes Sept 6, six days late" can be checked against a
+          calendar, and it is the question the student actually has. */}
       <div className="mt-8 text-center sm:mt-10">
-        <div className="text-7xl font-bold tracking-tight tnum sm:text-8xl">
-          {progress}
-          <span className="text-3xl text-ink-2 sm:text-4xl">%</span>
-        </div>
-        <p className="mt-1 text-sm text-ink-muted">done</p>
+        {r.projected_finish ? (
+          <>
+            <p className="text-sm text-ink-muted">Projected finish</p>
+            <div className="mt-1 text-5xl font-bold tracking-tight sm:text-6xl">
+              {fmtDay(r.projected_finish)}
+            </div>
+            {r.days_late > 0 ? (
+              <p className="mt-2 text-sm font-semibold text-warn tnum">
+                {r.days_late} days after your deadline
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-ink-muted">inside your deadline</p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-ink-muted">Needed pace</p>
+            <div className="mt-1 text-4xl font-bold tracking-tight sm:text-5xl">
+              {r.required_units_per_hour ? `${fmtRate(r.required_units_per_hour)}/h` : "—"}
+            </div>
+            <p className="mt-2 text-sm text-ink-muted">no time estimate yet</p>
+          </>
+        )}
         <div className="mt-4 flex items-center justify-center">
-          <DarkStatusBadge status={r.status} />
+          <DarkVerdictBadge verdict={r.verdict} />
         </div>
         <p className="mx-auto mt-3 max-w-sm text-sm text-ink-2">{r.message}</p>
-        {r.adjustments.length > 0 && (
-          <p className="mx-auto mt-2 max-w-sm text-sm text-warn">
-            → {r.adjustments[0]}
-            {r.adjustments.length > 1 && ` (+${r.adjustments.length - 1} more)`}
-          </p>
-        )}
       </div>
 
+      {/* The plan may drift under the threshold in silence — a metric that
+          lurches on one missed Tuesday gets tuned out within a fortnight. Past
+          it, the change is stated once and acknowledged, never applied behind
+          the student's back. */}
+      {r.load_changed && <LoadChangedCard goalId={g.goal.id} />}
+
       <div className="mt-8">
-        <DarkTrajectoryBar actualPct={r.actual_progress_pct} expectedPct={r.expected_progress_pct} />
+        <DarkFinishBar
+          startDate={g.goal.start_date}
+          deadline={g.goal.deadline}
+          projectedFinish={r.projected_finish}
+        />
       </div>
 
       {/* Today's move */}
@@ -209,6 +260,36 @@ function HeroMission({ g }: { g: DashboardGoal }) {
   );
 }
 
+function LoadChangedCard({ goalId }: { goalId: number }) {
+  const [dismissed, setDismissed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="ob-glass mt-6 rounded-2xl px-5 py-4">
+      <p className="text-sm font-semibold text-ink">Your plan got heavier.</p>
+      <p className="mt-1 text-sm text-ink-2">
+        Missed days have been folded back in, so the daily ask has gone up since you
+        last looked. The dates above already account for it.
+      </p>
+      <button
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await api.acknowledgeLoad(goalId);
+            setDismissed(true);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        disabled={busy}
+        className="ob-btn mt-3 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50"
+      >
+        {busy ? "…" : "Got it"}
+      </button>
+    </div>
+  );
+}
+
 function SmallMission({ g }: { g: DashboardGoal }) {
   return (
     <Link
@@ -218,10 +299,13 @@ function SmallMission({ g }: { g: DashboardGoal }) {
       <div>
         <p className="text-sm font-semibold text-ink">{g.goal.title}</p>
         <p className="mt-0.5 text-[11px] text-ink-muted tnum">
-          {g.days_remaining}d left · {g.progress_pct.toFixed(0)}% done
+          {g.days_remaining}d left ·{" "}
+          {g.reality.projected_finish
+            ? `finishes ${fmtDay(g.reality.projected_finish)}`
+            : `${g.progress_pct.toFixed(0)}% done`}
         </p>
       </div>
-      <DarkStatusBadge status={g.reality.status} />
+      <DarkVerdictBadge verdict={g.reality.verdict} />
     </Link>
   );
 }

@@ -3,10 +3,17 @@
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import { api, ApiError, Plan, ScheduledTask } from "@/lib/api";
-import { DarkShell, DarkStatusBadge, DarkTrajectoryBar } from "@/components/darkchrome";
+import { DarkFinishBar, DarkShell, DarkVerdictBadge } from "@/components/darkchrome";
 import { TextField } from "@/components/textfield";
 import { DataTable, EmptyState, PageLoading, StatTile, TabButton } from "@/components/ui";
 import { analytics } from "@/lib/analytics";
+
+function fmtDay(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export default function MissionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -165,33 +172,47 @@ export default function MissionPage({ params }: { params: Promise<{ id: string }
             </h1>
           </div>
           <div className="shrink-0 sm:pt-1">
-            <DarkStatusBadge status={r.status} />
+            <DarkVerdictBadge verdict={r.verdict} />
           </div>
         </div>
 
+        {/* Four tiles cut around the date rather than around percentages.
+            "Trajectory 84%" is a ratio of two numbers a student never chose;
+            a finish date and a pace in their own units are both checkable. */}
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile label="Days left" value={String(r.days_remaining)} sub={`of ${r.days_total}`} />
-          <StatTile label="Progress" value={`${r.actual_progress_pct.toFixed(0)}%`} />
-          <StatTile label="Expected" value={`${r.expected_progress_pct.toFixed(0)}%`} />
           <StatTile
-            label="Trajectory"
-            value={`${(r.trajectory_ratio * 100).toFixed(0)}%`}
-            sub="actual / expected"
+            label="Finishes"
+            value={r.projected_finish ? fmtDay(r.projected_finish) : "—"}
+            sub={r.days_late > 0 ? `${r.days_late}d late` : "on time"}
+          />
+          <StatTile label="Planned pace" value={`${r.pace_planned_units}/day`} />
+          <StatTile
+            label="Your pace"
+            value={r.pace_actual_units !== null ? `${r.pace_actual_units}/day` : "—"}
+            sub={r.pace_actual_units !== null ? "last 7 logged days" : "nothing logged yet"}
           />
         </div>
 
         <div className="mt-6">
-          <DarkTrajectoryBar actualPct={r.actual_progress_pct} expectedPct={r.expected_progress_pct} />
+          <DarkFinishBar
+            startDate={plan.goal.start_date}
+            deadline={plan.goal.deadline}
+            projectedFinish={r.projected_finish}
+          />
         </div>
 
         <div className="ob-glass mt-6 rounded-2xl px-5 py-4">
           <p className="text-sm text-ink">{r.message}</p>
-          {r.adjustments.length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {r.adjustments.map((a) => (
-                <li key={a} className="text-sm text-warn">→ {a}</li>
-              ))}
-            </ul>
+          {r.load_changed && (
+            <p className="mt-2 text-sm text-warn">
+              → Your plan got heavier since you last looked.
+            </p>
+          )}
+          {plan.goal.launched_over_capacity && (
+            <p className="mt-2 text-xs text-ink-muted">
+              You started this one knowing it didn&apos;t fit.
+            </p>
           )}
         </div>
 
