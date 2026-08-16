@@ -31,6 +31,33 @@ and the whole pivot — have never been in front of a real user.
    launched_over_capacity, acknowledged_load}`, `materials.minutes_per_unit`,
    and the `execution_records` table. Frontend second, rebuilt (the API URL is
    baked in at build time). Post-deploy check in `VERIFICATION.md`.
+
+   The gate was last run green in full on 2026-08-16 (numbers in
+   `VERIFICATION.md`), so this is ready to run as-is:
+
+   ```bash
+   cd /Users/markmitrofanov/acadassist
+
+   # 1. backend first — nothing may read the new columns before they exist
+   cd backend && vercel deploy --prod --yes && cd ..
+
+   # 2. frontend second, from the repo root (Root Directory is `frontend`;
+   #    deploying from inside it looks for frontend/frontend and fails)
+   vercel deploy --prod --yes
+
+   # 3. the one corrupted row, only now — never through the UI
+   cd backend && set -a; . ./.env.local; set +a
+   .venv/bin/python repair_task.py 2149 --actual 0            # dry run first
+   .venv/bin/python repair_task.py 2149 --actual 0 --apply
+
+   # 4. prove it landed (all read-only)
+   curl -s -o /dev/null -w '%{http_code}\n' https://goalassist-api.vercel.app/health   # 200
+   curl -s -o /dev/null -w '%{http_code}\n' https://goalassist-api.vercel.app/dashboard # 401
+   .venv/bin/python funnel.py        # must still report the accounts you expect
+
+   # 5. main should equal production truth
+   cd .. && git checkout main && git merge onboarding-flow && git push
+   ```
 2. **Repair production row #2149** — only after deploying. Task #2149 (user 8,
    goal 7 EGE math, 2026-08-11) is flagged `completed` while its unit records 87
    points. **Do not un-tick it through the UI**: the row claims 118 points the

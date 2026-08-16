@@ -10,7 +10,48 @@ is not a gate.
 ## The gate as of 2026-08-16
 
 Eleven backend suites, 354 checks, one command each. Two browser suites, 79
-checks, `npm run verify`. All of it has to be green before anything is committed.
+checks, `npm run verify`. Thirteen documentation claims, `verify_claims.py`. All
+of it has to be green before anything is committed.
+
+### The numbers, last measured 2026-08-16
+
+Recorded so drift is visible without re-deriving them. Any of these moving is
+either a change you meant to make or a regression; there is no third case.
+
+| Metric | Value |
+|---|---|
+| Backend suites / checks | **11 / 354** |
+| Browser checks (`npm run verify`) | **79** |
+| Documentation claims (`verify_claims.py`) | **13** |
+| `tsc --noEmit` | silent |
+| Lint | **4** errors, all `react-hooks/set-state-in-effect` |
+| `next build` | 18 routes |
+| Colour validators | contrast + palette pass |
+| Funnel (production) | registered 2 · mission 1 · availability 0 · first tick 0 · complete 0 |
+
+## Verifying the claims, not just the code
+
+`scripts/verify_claims.py` exists because the gate above proves the *code* works
+and proved nothing about whether the documents describing it were true. On
+2026-08-16 three claims turned out to be false at once — `funnel.py`'s schema-lag
+resilience, "PR #1 still open", and Phase 1's cutover being finished — each of
+which had been written up and believed.
+
+Every check is **structural**: it compares a name or a number in a document
+against the thing being described. Nothing greps prose for sentiment, because a
+check that depends on phrasing dies the first time a sentence is rewritten.
+
+The load-bearing one is **D**, a biconditional: the number of `ScheduledTask`
+references in `app/routers/` is non-zero **if and only if** `PROJECT_STATE.md`
+says the cutover is partial. Finishing the cutover without updating the document
+fails it; claiming it is finished while the writes remain fails it too.
+
+**All thirteen have been seen to go red.** Nine by deliberate perturbation, three
+during development, and one — G2 — only after it was caught passing vacuously:
+run against an empty database, `funnel.py` returns at its "no non-admin accounts"
+guard and never reaches the goal query, so the check was green while the exact
+line it guards was broken. It now seeds an account with a mission first. That is
+the same defect as the overflow check below, found the same way.
 
 | Suite | What it holds |
 |---|---|
@@ -75,6 +116,9 @@ npm run build             # must succeed, 18 routes, static rendering preserved
 # colour — required after ANY change to a token, gradient stop or glass alpha
 node scripts/validate_contrast.mjs   # text on glass AND on the bare field
 node scripts/validate_palette.mjs    # chart ramps, incl. deuteranopia
+
+# claims — asserts this file and PROJECT_STATE.md still describe the real code
+cd .. && backend/.venv/bin/python scripts/verify_claims.py
 
 # browser — both servers must already be up (see below)
 npm run verify
