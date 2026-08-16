@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import get_current_user, get_own_goal
 from ..models import Goal, Material, ProgressUnit, ScheduledTask, User
-from ..services import engine
+from ..services import clock, engine
 from ..schemas import (
     GoalCreate,
     GoalOut,
@@ -31,8 +31,11 @@ def create_goal(
     db: Session = Depends(get_db),
 ):
     data = payload.model_dump(exclude_unset=True)
+    # The model's default start date is server-local. A mission starts on the day
+    # the student began it, so set it here where the student's zone is known.
+    data.setdefault("start_date", clock.today_for(user))
     goal = Goal(user_id=user.id, **data)
-    if goal.deadline <= (goal.start_date or datetime.now().date()):
+    if goal.deadline <= (goal.start_date or clock.today_for(user)):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Deadline must be in the future")
     db.add(goal)
     db.commit()
@@ -62,7 +65,7 @@ def update_goal(
     for field, value in data.items():
         setattr(goal, field, value)
     if "deadline" in data:
-        engine.rebuild_schedule(db, goal, datetime.now().date())
+        engine.rebuild_schedule(db, goal, clock.today_for(goal.user))
     db.commit()
     db.refresh(goal)
     return goal
@@ -143,6 +146,7 @@ def add_material(
         type=payload.type,
         total_quantity=payload.total_quantity,
         unit=payload.unit,
+        minutes_per_unit=payload.minutes_per_unit,
     )
     db.add(material)
     db.add_all(_auto_slice(material))
@@ -151,7 +155,7 @@ def add_material(
     if payload.already_completed > 0:
         engine.apply_progress(material, payload.already_completed, absolute=True)
     db.refresh(goal)
-    engine.rebuild_schedule(db, goal, datetime.now().date())
+    engine.rebuild_schedule(db, goal, clock.today_for(goal.user))
     db.commit()
     db.refresh(material)
     return material
@@ -176,7 +180,7 @@ def update_material_progress(
     engine.apply_progress(
         material, min(payload.completed_quantity, material.total_quantity), absolute=True
     )
-    today = datetime.now().date()
+    today = clock.today_for(goal.user)
     # Sync today's tasks for this material with the new position.
     for task in db.scalars(
         select(ScheduledTask).where(
@@ -220,8 +224,16 @@ def edit_material(
         material.total_quantity = payload.total_quantity
     if payload.unit is not None:
         material.unit = payload.unit.strip()
+    if payload.minutes_per_unit is not None:
+        # Re-slicing changes what a unit *is*, so an estimate measured against
+        # the old unit would silently mean something else. The caller sends the
+        # new one alongside; if they do not, the old value is cleared rather
+        # than reinterpreted.
+        material.minutes_per_unit = payload.minutes_per_unit
+    elif reslice and payload.unit is not None:
+        material.minutes_per_unit = None
 
-    today = datetime.now().date()
+    today = clock.today_for(goal.user)
 
     if reslice:
         # Amount/unit changed → the old units no longer describe the work.
@@ -270,7 +282,7 @@ def delete_material(
     db.delete(material)
     db.flush()
     db.expire(goal)
-    engine.rebuild_schedule(db, goal, datetime.now().date())
+    engine.rebuild_schedule(db, goal, clock.today_for(goal.user))
     db.commit()
 
 
@@ -318,7 +330,7 @@ def update_unit(
     unit.completed_at = datetime.now(timezone.utc) if unit.is_completed else None
 
     # Keep today's scheduled tasks for this unit in sync, then redistribute.
-    today = datetime.now().date()
+    today = clock.today_for(goal.user)
     for task in db.scalars(
         select(ScheduledTask).where(
             ScheduledTask.progress_unit_id == unit.id,

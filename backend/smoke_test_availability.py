@@ -212,15 +212,29 @@ check(
 )
 
 # --------------------------------------------------------------------------
-# 7. An all-zero week cannot silently produce a plan with no tasks
+# 7. An all-zero week is refused at the door
 #
-# The UI blocks "0 study days", but the server must not depend on that. The
-# documented engine behaviour is to fall back to even distribution — a plan the
-# student can then fix beats a mission that appears to require no work at all.
+# It used to be accepted, because these hours were only ever relative weights —
+# the engine normalised them away and fell back to even distribution, so an
+# all-zero week still produced a plan. Under the pivot they are real capacity
+# that feasibility divides by, and "I have no time at all" is not a rhythm the
+# planner can say anything true about. So the server now rejects it rather than
+# inventing a week the student did not describe. The UI already blocked it; the
+# server no longer depends on that.
+#
+# The engine's even-distribution fallback stays in place for the schedules of
+# accounts that stored an all-zero week before this rule existed.
 # --------------------------------------------------------------------------
 Hz = register("zeroes@example.com")
 r = client.patch("/auth/me", headers=Hz, json={"availability": weekly()})
-check("all-zero availability is accepted", r.status_code == 200, r.status_code)
+check("an all-zero week is rejected", r.status_code == 422, r.status_code)
+check(
+    "…and says which rule it broke",
+    "at least one day" in r.text.lower(),
+    r.text[:200],
+)
+# Give it a real week so the rest of the section has a mission to reason about.
+client.patch("/auth/me", headers=Hz, json={"availability": weekly(mon=2)})
 gid_z = client.post(
     "/goals", headers=Hz, json={"title": "Blocked week", "deadline": (start + timedelta(days=10)).isoformat()}
 ).json()["id"]

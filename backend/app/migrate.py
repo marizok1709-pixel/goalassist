@@ -26,6 +26,23 @@ ADDITIONS: dict[str, dict[str, str]] = {
         "consent_updated_at": "TIMESTAMP NULL",
         "note": "VARCHAR(500) NULL",
         "availability_refined": "BOOLEAN NOT NULL DEFAULT FALSE",
+        # Left NULL on existing rows on purpose: we do not know where those
+        # accounts are, and guessing a zone would silently move their "today".
+        "timezone": "VARCHAR(64) NULL",
+    },
+    "goals": {
+        # NULL means "never replanned", which reads as due — the first read of
+        # the day catches the mission up whether or not it has one of these.
+        "replanned_on": "DATE NULL",
+        # Existing missions are NORMAL: nobody has told us otherwise, and the
+        # value only affects how the pool is shared.
+        "priority": "VARCHAR(10) NOT NULL DEFAULT 'NORMAL'",
+        "launched_over_capacity": "BOOLEAN NOT NULL DEFAULT FALSE",
+        "acknowledged_load": "FLOAT NULL",
+    },
+    "materials": {
+        # NULL is the honest default: no estimate has ever been measured.
+        "minutes_per_unit": "FLOAT NULL",
     },
     "scheduled_tasks": {
         # Deliberately left NULL on existing rows rather than backfilled: NULL

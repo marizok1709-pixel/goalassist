@@ -86,7 +86,13 @@ def main() -> int:
         reached = dict.fromkeys(STAGES, 0)
 
         for u in rows:
-            goals = db.scalars(select(Goal).where(Goal.user_id == u.id)).all()
+            # Explicit columns here too, for the reason given above: the pivot
+            # added four columns to `goals`, and a mapper-wide SELECT went on
+            # to fail against production on `goals.replanned_on` — blinding the
+            # one report that measures the one metric.
+            goals = db.execute(
+                select(Goal.id, Goal.status, Goal.title).where(Goal.user_id == u.id)
+            ).all()
             goal_ids = [g.id for g in goals]
 
             scheduled = completed = 0

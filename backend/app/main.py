@@ -11,7 +11,7 @@ from .metrics import metrics
 
 from .database import Base, engine
 from .migrate import ensure_columns
-from .routers import admin, auth, goals, plan, privacy
+from .routers import admin, auth, feasibility, goals, plan, privacy
 
 Base.metadata.create_all(bind=engine)
 # create_all() never alters an existing table, so additive columns are applied
@@ -93,6 +93,7 @@ async def record_request_metrics(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(goals.router)
 app.include_router(plan.router)
+app.include_router(feasibility.router)
 app.include_router(privacy.router)
 app.include_router(admin.router)
 

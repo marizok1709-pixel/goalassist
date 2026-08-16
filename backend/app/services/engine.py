@@ -158,13 +158,18 @@ def build_reality_report(goal: Goal, today: date) -> RealityReport:
         "FAILED": f"Deadline reached with {actual_pct:.0f}% completed.",
         "AHEAD": f"You are ahead of schedule ({actual_pct:.0f}% done, {expected_pct:.0f}% expected). Keep the pace.",
         "ON_TRACK": f"On track: {actual_pct:.0f}% done vs {expected_pct:.0f}% expected.",
+        # Tone. These are the fallbacks now — when the planner has minutes to
+        # work with, `_enrich` replaces them with a date. Shouting was the old
+        # answer to "the student is not reacting", and a banner that shouts gets
+        # tuned out inside a fortnight. The number is enough; the capitals were
+        # doing the work the arithmetic should do.
         "AT_RISK": (
-            f"You are {days_behind} days behind ({actual_pct:.0f}% done vs {expected_pct:.0f}% expected). "
-            "At current speed you will miss the deadline unless you adjust."
+            f"You are {days_behind} days behind — {actual_pct:.0f}% done against "
+            f"{expected_pct:.0f}% expected. Something has to give."
         ),
         "OFF_TRACK": (
-            f"WARNING: {days_behind} days behind — {actual_pct:.0f}% done vs {expected_pct:.0f}% expected. "
-            "At current speed you WILL miss your deadline."
+            f"You are {days_behind} days behind — {actual_pct:.0f}% done against "
+            f"{expected_pct:.0f}% expected. This deadline does not hold at your current pace."
         ),
     }
     if elapsed == 0:
@@ -202,7 +207,12 @@ def _fmt(x: float) -> str:
 EPS = 1e-9
 
 
-def build_schedule(goal: Goal, from_date: date, availability: dict | None = None) -> list[dict]:
+def build_schedule(
+    goal: Goal,
+    from_date: date,
+    availability: dict | None = None,
+    skip_dates: set[date] | None = None,
+) -> list[dict]:
     """Distribute all remaining work over from_date..deadline (inclusive),
     weighted by the user's weekly availability.
 
@@ -210,18 +220,31 @@ def build_schedule(goal: Goal, from_date: date, availability: dict | None = None
     days get nothing; slow-cadence materials (exams) land on spaced days via
     cumulative rounding. A day crossing a unit boundary yields one task per
     unit touched.
+
+    `skip_dates` are days that already carry a row somebody reported on. They
+    get zero weight rather than being filtered afterwards: a day that has been
+    spoken about is not free capacity, and generating work for it would put a
+    second row beside the one that is already there.
     """
     n_days = (goal.deadline - from_date).days + 1
     if n_days <= 0:
         return []
 
-    weights = [day_weight(availability, from_date + timedelta(days=d)) for d in range(n_days)]
+    skip = skip_dates or set()
+    weights = [
+        0.0 if (from_date + timedelta(days=d)) in skip
+        else day_weight(availability, from_date + timedelta(days=d))
+        for d in range(n_days)
+    ]
     total_weight = sum(weights)
     if total_weight <= 0:
         # Fully blocked week(s) — fall back to even distribution rather than
-        # scheduling nothing at all.
-        weights = [1.0] * n_days
-        total_weight = float(n_days)
+        # scheduling nothing at all. Reported days stay excluded: they are not
+        # blocked, they are done being planned.
+        weights = [0.0 if (from_date + timedelta(days=d)) in skip else 1.0 for d in range(n_days)]
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            return []
     cum_weights: list[float] = []
     acc = 0.0
     for w in weights:
@@ -290,6 +313,73 @@ def build_schedule(goal: Goal, from_date: date, availability: dict | None = None
     return tasks
 
 
+def derive_descriptions(goal: Goal, tasks: list[ScheduledTask], today: date) -> dict[int, str]:
+    """Re-derive the range each upcoming row names, from the mission's live position.
+
+    A row's description is written when the row is built and never touched again,
+    so it is only true for as long as the position it was computed from holds.
+    Two rows built at different moments therefore disagree — Saturday saying
+    "pages 24-26" beside Sunday saying "pages 22-24" is two snapshots of a cursor
+    that moved between them, not a scheduler walking backwards.
+
+    So the range is not read back from the row; it is recomputed here in one pass
+    over one cursor, the same way `build_schedule` lays it down. Contiguity stops
+    being something the stored data has to preserve and becomes a property of how
+    it is read.
+
+    Only days still ahead take part. A past day is history and a reported day is
+    settled — its shortfall has already been redistributed into the days after
+    it, so letting it move the cursor would count that work twice.
+    """
+    upcoming: dict[int, list[ScheduledTask]] = {}
+    for t in tasks:
+        if t.date < today or t.logged or t.material_id is None:
+            continue
+        upcoming.setdefault(t.material_id, []).append(t)
+
+    out: dict[int, str] = {}
+    for m in goal.materials:
+        rows = upcoming.get(m.id)
+        if not rows:
+            continue
+        rows.sort(key=lambda t: (t.date, t.id))
+
+        units = sorted(m.progress_units, key=lambda u: (u.position, u.id))
+        offsets: dict[int, float] = {}
+        cum = 0.0
+        for u in units:
+            offsets[u.id] = cum
+            cum += u.quantity
+        segments = [
+            (u, u.completed_quantity, u.quantity - u.completed_quantity)
+            for u in units
+            if u.quantity - u.completed_quantity > EPS
+        ]
+
+        seg_i, seg_used = 0, 0.0
+        for t in rows:
+            amount = t.quantity
+            parts: list[str] = []
+            while amount > EPS and seg_i < len(segments):
+                unit, seg_start, seg_avail = segments[seg_i]
+                take = min(amount, seg_avail - seg_used)
+                if seg_start == 0 and take >= unit.quantity - EPS:
+                    parts.append(unit.title)
+                else:
+                    s_abs = offsets[unit.id] + seg_start + seg_used
+                    parts.append(
+                        f"{m.name}: {m.unit} {int(s_abs) + 1}-{int(round(s_abs + take))}"
+                    )
+                amount -= take
+                seg_used += take
+                if seg_used >= seg_avail - EPS:
+                    seg_i += 1
+                    seg_used = 0.0
+            if parts:
+                out[t.id] = ", ".join(parts)
+    return out
+
+
 def rebuild_start_date(db: Session, goal: Goal, today: date) -> date:
     """Rebuild from today unless today's plan was already reported on (then tomorrow).
 
@@ -307,15 +397,61 @@ def rebuild_start_date(db: Session, goal: Goal, today: date) -> date:
     return today + timedelta(days=1) if worked_today else today
 
 
+def needs_replan(db: Session, goal: Goal, today: date) -> bool:
+    """Has a day gone by that the plan has not yet been told about?
+
+    A missed day changes the plan exactly as much as a logged one does — the
+    work it owed is still owed, just with one fewer day to do it in. Nothing
+    writes to the database on a day you don't open the app, though, so nothing
+    used to notice, and the schedule kept serving rows computed against a
+    position the mission left behind. This is the trigger that was missing.
+    """
+    if goal.replanned_on is not None and goal.replanned_on >= today:
+        return False
+    missed = db.scalar(
+        select(ScheduledTask.id).where(
+            ScheduledTask.goal_id == goal.id,
+            ScheduledTask.date < today,
+            ScheduledTask.completed.is_(False),
+            ScheduledTask.actual_quantity.is_(None),
+        )
+    )
+    return missed is not None
+
+
+def reported_dates(db: Session, goal: Goal, from_date: date) -> set[date]:
+    """Days at or after `from_date` that already carry a row somebody reported on."""
+    return set(
+        db.scalars(
+            select(ScheduledTask.date).where(
+                ScheduledTask.goal_id == goal.id,
+                ScheduledTask.date >= from_date,
+                or_(ScheduledTask.completed.is_(True), ScheduledTask.actual_quantity.is_not(None)),
+            )
+        )
+    )
+
+
 def rebuild_schedule(db: Session, goal: Goal, today: date, from_date: date | None = None) -> None:
     """Delete the unreported future schedule and redistribute remaining work.
 
     Only rows nobody has spoken about are movable. A completed row is history;
     so is a row logged at zero or part-done — deleting those would throw away a
     fact the user reported in order to re-plan around it.
+
+    Those surviving rows also take their day off the table. Without that, a day
+    logged ahead of time from the calendar keeps its row *and* receives a freshly
+    generated one, and the same work gets scheduled twice.
     """
+    # The session runs with autoflush off, so a caller that has just recorded a
+    # log still holds it in memory. Every query below decides what to keep by
+    # reading `completed` / `actual_quantity` from the database, and would
+    # otherwise judge the row being edited by its state before the edit — and
+    # delete the very task that was just reported on.
+    db.flush()
     if from_date is None:
         from_date = rebuild_start_date(db, goal, today)
+    skip = reported_dates(db, goal, from_date)
     for task in db.scalars(
         select(ScheduledTask).where(
             ScheduledTask.goal_id == goal.id,
@@ -326,8 +462,11 @@ def rebuild_schedule(db: Session, goal: Goal, today: date, from_date: date | Non
     ):
         db.delete(task)
     db.flush()
-    for t in build_schedule(goal, from_date, availability=goal.user.availability):
+    for t in build_schedule(
+        goal, from_date, availability=goal.user.availability, skip_dates=skip
+    ):
         db.add(ScheduledTask(**t))
+    goal.replanned_on = today
 
 
 def apply_progress(

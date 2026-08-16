@@ -33,8 +33,9 @@ API docs: http://localhost:8000/docs
 | POST | `/goals/{id}/schedule/rebuild` | Redistribute remaining work |
 | GET | `/goals/{id}/history` | Past scheduled tasks (incl. missed) |
 | GET | `/today` | Today's tasks across all active missions |
-| POST | `/today/more` | Pull each mission's next scheduled day into today |
-| PATCH | `/tasks/{id}` | Complete a task; `actual_quantity` logs more/less than planned |
+| PATCH | `/tasks/{id}` | Report a day; `actual_quantity` logs more/less than planned, `actual_minutes` logs how long it took |
+| POST | `/plan/preview` | **Does this fit?** — feasibility for a mission that does not exist yet, planned alongside the ones that do |
+| POST | `/goals/{id}/acknowledge` | The student has seen that the plan got heavier; resets the quiet threshold |
 | GET | `/dashboard` | All active missions + Reality Engine status |
 
 Weekly availability (hours per weekday) lives on the user (`PATCH /auth/me` with

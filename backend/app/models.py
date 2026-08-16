@@ -18,6 +18,34 @@ class GoalStatus(str, enum.Enum):
     archived = "archived"
 
 
+class GoalPriority(str, enum.Enum):
+    """How this mission competes for the one capacity pool.
+
+    PAUSED is not a status: the mission is still real, still has a deadline and
+    still shows its progress. It simply stops taking hours from the others,
+    which is the honest lever for a student carrying more than fits.
+    """
+
+    high = "HIGH"
+    normal = "NORMAL"
+    paused = "PAUSED"
+
+
+class DayStatus(str, enum.Enum):
+    """What became of one scheduled day. There is no PENDING.
+
+    A record is written when its day arrives or when it is reported on, never
+    ahead of time. Rows for days that have not happened are exactly what made
+    the schedule go stale: a plan persisted on Wednesday and read on Saturday
+    described a position the mission never reached. The forward plan is derived
+    now, so the only thing worth storing is what actually happened.
+    """
+
+    completed = "COMPLETED"
+    partial = "PARTIAL"
+    skipped = "SKIPPED"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -36,6 +64,12 @@ class User(Base):
     # themselves — a student who genuinely picks the default value on every
     # study day is byte-identical to one who never answered.
     availability_refined: Mapped[bool] = mapped_column(Boolean, default=False)
+    # IANA zone, e.g. "Europe/Berlin". "Today" is a claim about the student's
+    # wall clock, not the server's: the API runs in UTC on Vercel, so between
+    # local midnight and 02:00 a Berlin student was served yesterday's tasks and
+    # could tick them. NULL means an account that predates this and keeps the
+    # old server-local behaviour.
+    timezone: Mapped[str | None] = mapped_column(String(64), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     # Operator flag. Deliberately has no self-service path: nothing in the API
@@ -70,11 +104,29 @@ class Goal(Base):
     start_date: Mapped[date] = mapped_column(Date, default=lambda: datetime.now().date())
     status: Mapped[GoalStatus] = mapped_column(Enum(GoalStatus), default=GoalStatus.active)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Last day the schedule was re-evaluated against reality. A day that passes
+    # without being reported on is a change to the plan just as much as a log is,
+    # but nothing writes on that day, so nothing used to notice. This gates the
+    # catch-up rebuild to once per day per mission.
+    replanned_on: Mapped[date | None] = mapped_column(Date, default=None)
+    priority: Mapped[GoalPriority] = mapped_column(
+        Enum(GoalPriority), default=GoalPriority.normal
+    )
+    # Set when the student was told this does not fit and chose to start anyway.
+    # A quiet permanent marker, never a nag: the engine advises, the student
+    # decides, and the record of that decision belongs to them.
+    launched_over_capacity: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Minutes-per-study-day the student last acknowledged. The plan may grow
+    # under it silently; crossing it is what earns an interruption.
+    acknowledged_load: Mapped[float | None] = mapped_column(Float, default=None)
 
     user: Mapped[User] = relationship(back_populates="goals")
     materials: Mapped[list["Material"]] = relationship(back_populates="goal", cascade="all, delete-orphan")
     progress_units: Mapped[list["ProgressUnit"]] = relationship(back_populates="goal", cascade="all, delete-orphan")
     scheduled_tasks: Mapped[list["ScheduledTask"]] = relationship(
+        back_populates="goal", cascade="all, delete-orphan"
+    )
+    execution_records: Mapped[list["ExecutionRecord"]] = relationship(
         back_populates="goal", cascade="all, delete-orphan"
     )
 
@@ -88,6 +140,16 @@ class Material(Base):
     type: Mapped[str | None] = mapped_column(String(80), default=None)
     total_quantity: Mapped[float] = mapped_column(Float)
     unit: Mapped[str] = mapped_column(String(40))
+    # How long one unit takes *this* student. NULL means no estimate yet, which
+    # is a fact rather than a gap: nothing in the product has ever recorded how
+    # long anything took, so any seed value would be a guess presented as
+    # arithmetic. Without it the planner states a required units-per-hour rate
+    # instead of a finish date. Measurement fills it in later.
+    #
+    # This lives on the material rather than on a shared library row because
+    # `Material.goal_id` already makes it per-mission — the student's own
+    # number, not a global average.
+    minutes_per_unit: Mapped[float | None] = mapped_column(Float, default=None)
 
     goal: Mapped[Goal] = relationship(back_populates="materials")
     progress_units: Mapped[list["ProgressUnit"]] = relationship(
@@ -150,6 +212,39 @@ class ScheduledTask(Base):
     def logged(self) -> bool:
         """Has this day been reported on at all? A reported 0 counts."""
         return self.actual_quantity is not None or self.completed
+
+
+class ExecutionRecord(Base):
+    """One day of one mission, after the fact.
+
+    The counterpart to the derived plan: the planner computes what *should*
+    happen from live state on every read, and this table remembers what *did*.
+    Nothing here describes the future, which is the property that keeps the two
+    from ever disagreeing.
+
+    `actual_minutes` is the only measurement the product has ever taken of how
+    long work really takes. Without it, calibration — "we assumed 4.5 min/page,
+    you run at 6.2" — has nothing to calibrate from, and `minutes_per_unit`
+    stays a guess for ever.
+    """
+
+    __tablename__ = "execution_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id"), index=True)
+    material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"), default=None)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    planned_units: Mapped[float] = mapped_column(Float, default=0.0)
+    planned_minutes: Mapped[float] = mapped_column(Float, default=0.0)
+    actual_units: Mapped[float] = mapped_column(Float, default=0.0)
+    # NULL means the student reported the amount but not the time. Never
+    # inferred from planned_minutes — that would manufacture the very
+    # measurement this column exists to collect.
+    actual_minutes: Mapped[float | None] = mapped_column(Float, default=None)
+    status: Mapped[DayStatus] = mapped_column(Enum(DayStatus), default=DayStatus.partial)
+    reported_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+    goal: Mapped[Goal] = relationship(back_populates="execution_records")
 
 
 class AnalyticsEvent(Base):

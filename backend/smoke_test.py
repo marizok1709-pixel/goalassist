@@ -123,10 +123,11 @@ book = [x for x in u if x["unit"] == "pages"][0]
 check("overshoot recorded on material", book["completed_quantity"] == planned + 8,
       str(book["completed_quantity"]))
 
-# 7. WANNA DO MORE — pulls the next day's tasks into today
-before = sum(len(m["tasks"]) for m in client.get("/today", headers=H).json()["missions"])
-after = sum(len(m["tasks"]) for m in client.post("/today/more", headers=H).json()["missions"])
-check("do-more adds tasks to today", after > before, f"{before} -> {after}")
+# 7. WANNA DO MORE is gone — it moved rows between days without re-planning
+# them, which is how work landed on a zero-hour day carrying another day's
+# range. Doing more is logging more; check the endpoint no longer answers.
+check("do-more endpoint removed", client.post("/today/more", headers=H).status_code == 404,
+      str(client.post("/today/more", headers=H).status_code))
 
 # 8. Material progress endpoint ("I'm on page 120")
 r = client.patch(f"/goals/{gid}/materials/1", headers=H, json={"completed_quantity": 120})

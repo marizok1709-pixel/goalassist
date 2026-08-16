@@ -335,7 +335,10 @@ check(
     past["description"],
 )
 check("the missed day states the amount it owed", "pages" in past["description"], past["description"])
-check("…and says it was not done", "not done" in past["description"], past["description"])
+# "not done" was read as a quantity — "139 points — not done" looked like a
+# stopping point rather than a day nobody opened. Missed and reported-at-zero
+# are different facts and now say so.
+check("…and says it was missed, not a number", "missed" in past["description"], past["description"])
 check("today still names its pages", "-" in today_row["description"], today_row["description"])
 check(
     "history agrees with the calendar",

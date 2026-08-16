@@ -9,7 +9,7 @@ from ..deps import get_current_user
 from ..models import GoalStatus, User
 from ..schemas import Token, UserCreate, UserLogin, UserOut, UserUpdate
 from ..security import create_access_token, hash_password, verify_password
-from ..services import engine
+from ..services import clock, engine
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,6 +26,10 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         university=payload.university,
         degree=payload.degree,
         year=payload.year,
+        # An unresolvable zone is stored as NULL rather than rejected: a browser
+        # that reports something we cannot parse should still get an account,
+        # and NULL simply means "fall back to the server clock".
+        timezone=payload.timezone if clock.is_valid_timezone(payload.timezone) else None,
     )
     db.add(user)
     db.commit()
@@ -53,11 +57,13 @@ def update_me(
     db: Session = Depends(get_db),
 ):
     data = payload.model_dump(exclude_unset=True)
+    if "timezone" in data and not clock.is_valid_timezone(data["timezone"]):
+        data["timezone"] = None
     for field, value in data.items():
         setattr(user, field, value)
     if "availability" in data:
         # New weekly rhythm → every active mission's future schedule changes.
-        today = datetime.now().date()
+        today = clock.today_for(user)
         for goal in user.goals:
             if goal.status == GoalStatus.active:
                 engine.rebuild_schedule(db, goal, today)
