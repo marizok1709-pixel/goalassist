@@ -16,7 +16,8 @@ AcadAssist, Life.exe — the repo directory is still `acadassist`.)
 2026-08-03: frontend `goalassist.vercel.app`, API `goalassist-api.vercel.app`,
 Neon Postgres in `eu-central-1` with the API pinned to `fra1`.
 
-The pivot's **Phase 1 is live** — deployed 2026-08-16, backend then frontend.
+The pivot's **Phase 1 is live** (2026-08-16) and **its cutover with it**
+(2026-08-17): the forward plan is computed on every read and never stored.
 Three sessions of work (honest day logging, scheduler correctness, and the whole
 pivot) are now in front of real users for the first time. `main` and
 `onboarding-flow` are in sync and pushed.
@@ -26,16 +27,15 @@ pivot) are now in front of real users for the first time. `main` and
 
 ## ▶️ Resume here
 
-**Not deployed.** The cutover changes the API — `PATCH /tasks/{id}` is gone —
-so backend and frontend must go out **together**. An old frontend against the
-new backend cannot log a day.
+**Deployed 2026-08-17**, backend and frontend together — the cutover removed
+`PATCH /tasks/{id}`, so an old frontend could not have logged a day. Verified
+live: the route is gone from the API, the shipped bundle carries only the
+day-keyed path, and the derived engine answers for every real account.
 
-1. **Deploy, both halves in one go.** Backend first, frontend immediately after,
-   no gap. Commands in "Deploy topology" below.
-2. **Watch Sima.** She returned on 2026-08-16 and reached `availability` — the
+1. **Watch Sima.** She returned on 2026-08-16 and reached `availability` — the
    furthest anyone has ever come. She is one tick from the metric. If she stalls
    at the first tick, that is worth more than anything else on the queue.
-3. **Then the queue.**
+2. **Then the queue.**
 
 ### The cutover is done — the forward plan is no longer stored
 

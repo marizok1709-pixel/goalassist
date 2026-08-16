@@ -48,10 +48,16 @@ the change it was built to guard. Check `D` now holds the new invariant
 (`rebuild_schedule` call sites `== 0` ⟺ the document says the plan is derived)
 and was proven red by adding a call site back.
 
-### Note
+### Deployed
 
-The API change means **backend and frontend must deploy together**; an old
-frontend cannot log a day against the new backend.
+2026-08-17, backend and frontend together. Verified live: `/tasks/{id}` is gone
+from the route table, the shipped bundle carries only the day-keyed path, and
+the derived engine answers for every real account.
+
+**Vasiliy's mission derives no upcoming days, and that is correct** — its
+deadline was 2026-08-16, so there is nothing left to schedule. The 22 rows it
+still holds are stale leftovers from when the deadline was ahead; they are now
+ignored on read rather than presented as a plan.
 
 ## 2026-08-16 — Phase 1 goes live, and two defects only production could find
 
