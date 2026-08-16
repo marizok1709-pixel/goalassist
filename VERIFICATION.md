@@ -1,13 +1,13 @@
 # Verification
 
-_How work on GoalAssist gets proven. Last updated 2026-08-15._
+_How work on GoalAssist gets proven. Last updated 2026-08-16._
 
-The ranked plan lives at the top of `PROJECT_STATE.md`. This file says what
-"done" means for each remaining item, and what has to pass before anything is
-committed. It is written **before** the items are built on purpose — a gate
-agreed after the fact is not a gate.
+The ranked queue lives in `PROJECT_STATE.md`. This file says what "done" means
+for each remaining item, and what has to pass before anything is committed. It is
+written **before** the items are built on purpose — a gate agreed after the fact
+is not a gate.
 
-## The gate as of 2026-08-15
+## The gate as of 2026-08-16
 
 Eleven backend suites, 354 checks, one command each. Two browser suites, 79
 checks, `npm run verify`. All of it has to be green before anything is committed.
@@ -32,6 +32,12 @@ Sat/Sun while asserting that today holds work. That made the core-loop suite fai
 every weekend for reasons that said nothing about the product. Rest days are now
 chosen relative to today.
 
+The same defect survived in `smoke_test_feasibility.py`, where acceptance A
+hardcoded `sun: 0.0` and then asserted today held work — so the suite failed the
+first Sunday it ran (2026-08-16) for reasons that said nothing about the product.
+Fixed the same way. **Any test that asserts "today has work" must choose its rest
+days relative to today**, or the weekday decides the result.
+
 ## Why this exists
 
 The backend has always been covered and repeatable: six suites, ~200 checks,
@@ -51,11 +57,12 @@ Everything here passes before a commit. Nothing is skipped because a change
 "only touched CSS" — the consent-banner defect only touched CSS.
 
 ```bash
-# backend — seven suites, throwaway SQLite each, no shared state
+# backend — eleven suites, throwaway SQLite each, no shared state
 cd backend
 for t in smoke_test.py smoke_test_material_edit.py smoke_test_hardening.py \
          smoke_test_privacy.py smoke_test_admin.py smoke_test_availability.py \
-         smoke_test_logging.py; do
+         smoke_test_logging.py smoke_test_replan.py smoke_test_planner.py \
+         smoke_test_feasibility.py smoke_test_golden.py; do
   .venv/bin/python $t | tail -1
 done
 
@@ -63,7 +70,7 @@ done
 cd ../frontend
 npx tsc --noEmit          # must be silent
 npm run lint              # must be exactly the baseline below
-npm run build             # must succeed, 17 routes, static rendering preserved
+npm run build             # must succeed, 18 routes, static rendering preserved
 
 # colour — required after ANY change to a token, gradient stop or glass alpha
 node scripts/validate_contrast.mjs   # text on glass AND on the bare field
@@ -170,20 +177,36 @@ tasks; the full material is still scheduled; hours are a weight, not a label;
 a rest day today means `/today` is genuinely empty; an all-zero week falls back
 to even distribution rather than a plan with no work in it.
 
-### Item 4 — "I fell behind — fix my plan"
+### Queue 2 — finish the cutover
+
+The one part of Phase 1 that did not land (detail in `PROJECT_STATE.md`). The
+gate is behavioural, because "the old code is deleted" proves nothing on its own:
+
+- `smoke_test_golden.py` shows **no diff** for the two real missions — that is
+  what the golden file was built for, and this is the change it was built to
+  guard
+- no `ScheduledTask` row exists for a date after today, at any point, for any
+  fixture in any suite
+- `smoke_test_replan.py` still passes unchanged: contiguity, the reported-day
+  guard, zero-hour days, once-a-day catch-up
+- a day already reported on keeps exactly one `ExecutionRecord`, and reversing it
+  returns exactly what was logged
+
+### Queue 4 — "I fell behind — fix my plan"
 
 `PATCH /goals/{id}` already rebuilds on a deadline change
-(`backend/app/routers/goals.py:55`); only the UI is missing. The gate is on
-engine behaviour under it, not just on the button existing:
+(`backend/app/routers/goals.py:55`), and `components/reality-check.tsx` plus the
+`suggested_*` fields already exist — so this is mounting, not building. The gate
+is on engine behaviour under it, not just on the button existing:
 
 - moving a deadline out keeps completed history and does **not** move a day
   already worked on (`engine.rebuild_start_date`)
-- trajectory and `days_behind` recompute against the new deadline
+- the projected finish and `days_late` recompute against the new deadline
 - dropping a material re-slices the remainder and loses no completed progress
 - a tap-through in `verify/loop.mjs` reaching the new control from `/today`,
   because the point of the item is that the dead end currently has one exit
 
-### Item 5 — daily email
+### Queue 5 — daily email
 
 There is no mail path in `backend/` today (no smtp / resend / sendgrid
 anywhere). The gate is delivery-level, because a unit test that asserts "we
@@ -195,24 +218,21 @@ called send()" proves nothing about whether mail arrives:
 - a user with no scheduled tasks receives **no** mail
 - the provider comes through the Vercel Marketplace, not a hardcoded SDK
 
-### Item 6 — timezone as a stored IANA string
+### Timezone as a stored IANA string · **shipped 2026-08-15, gated**
 
-Better scoped than it looks: there is one chokepoint. `_today()` at
-`backend/app/routers/plan.py:28` is `datetime.now().date()`, and every `today`
-computation flows through it; the direct `datetime.now().date()` calls in
-`goals.py` and `auth.py` feed rebuilds. On Vercel that is UTC, so a Moscow user
-opening the app at 01:00 local is served yesterday's tasks.
+Shipped as prerequisite 0b of the pivot rather than as its own item, because
+Phase 1 stacked four more date-triggered behaviours on the same boundary.
+`services/clock.py` resolves "today" in the *student's* zone; `User.timezone` is
+captured at register and backfilled silently on the dashboard for older accounts.
+Locked by `smoke_test_feasibility.py`: the zone is stored, an unresolvable zone
+is stored as NULL rather than rejected, and registering without one still works.
 
-- IANA string captured at register (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
-- threaded through those call sites
-- with a frozen clock at 23:30 UTC, an `Asia/Nicosia` account gets tomorrow's
-  date while a `Pacific/Honolulu` account still gets yesterday's
-- the frontend inconsistency resolves to one helper: `missions/[id]` marks
-  TODAY via `toISOString` (UTC) while `/calendar` uses local time
-
-This class of bug is not hypothetical here — `verify/lib.mjs`'s own
-`isoInDays()` was written with `toISOString()` and produced an off-by-one
-deadline the first time the suite ran past a date boundary.
+This class of bug is not hypothetical here. `verify/lib.mjs`'s own `isoInDays()`
+was written with `toISOString()` and produced an off-by-one deadline the first
+time the suite ran past a date boundary — and mid-build the clock rolled past
+midnight on a UTC+3 machine against a UTC+2 student, failing a suite that had
+assumed the two agreed. **A test's `date.today()` is the machine's date; the API
+answers from the student's zone. They are not the same thing on this laptop.**
 
 ## Verifying the product, not the code
 
@@ -232,6 +252,14 @@ This is the plan's success metric — *one person who is not Mark completes one
 mission end to end* — made observable in one command instead of hand-written
 SQL. It selects explicit columns rather than the whole mapper, so it keeps
 working when the deployed schema lags the model by a cold start.
+
+**That guarantee held for `users` and was broken for `goals`.** The pivot added
+four columns to `Goal`, and a surviving mapper-wide `select(Goal)` then failed
+against production on `goals.replanned_on` — blinding the one report that
+measures the one metric, for the eleven days the pivot sat undeployed. Fixed
+2026-08-16. The lesson is narrower than "use explicit columns": **a guard
+documented in one function is not a guard**, and the only proof it holds is
+running `funnel.py` against production after any model change.
 
 Run it before deciding what to build next. A funnel that stalls at
 `availability` and one that stalls at `first tick` call for opposite work.
