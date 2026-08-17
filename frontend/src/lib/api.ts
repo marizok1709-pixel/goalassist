@@ -508,8 +508,17 @@ export const api = {
   updateDay: (
     goalId: number,
     day: string,
+    // `material_id` is part of the identity, not an optional extra: a mission
+    // can have Listening, Speaking and Writing all due the same Monday, and
+    // without it the server cannot tell which one is being reported. Omitting
+    // it on such a day is refused rather than guessed.
     // actual_minutes is the only measurement of real pace the product takes.
-    data: { completed: boolean; actual_quantity?: number; actual_minutes?: number }
+    data: {
+      completed: boolean;
+      material_id?: number | null;
+      actual_quantity?: number;
+      actual_minutes?: number;
+    }
   ) =>
     request<{ task: ScheduledTask; overshoot: number; message: string | null }>(
       `/goals/${goalId}/days/${day}`,

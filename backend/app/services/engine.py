@@ -213,6 +213,7 @@ def build_schedule(
     from_date: date,
     availability: dict | None = None,
     skip_dates: set[date] | None = None,
+    skip_by_material: dict[int, set[date]] | None = None,
 ) -> list[dict]:
     """Distribute all remaining work over from_date..deadline (inclusive),
     weighted by the user's weekly availability.
@@ -231,29 +232,41 @@ def build_schedule(
     if n_days <= 0:
         return []
 
-    skip = skip_dates or set()
-    weights = [
-        0.0 if (from_date + timedelta(days=d)) in skip
-        else day_weight(availability, from_date + timedelta(days=d))
-        for d in range(n_days)
-    ]
-    total_weight = sum(weights)
-    if total_weight <= 0:
-        # Fully blocked week(s) — fall back to even distribution rather than
-        # scheduling nothing at all. Reported days stay excluded: they are not
-        # blocked, they are done being planned.
-        weights = [0.0 if (from_date + timedelta(days=d)) in skip else 1.0 for d in range(n_days)]
-        total_weight = sum(weights)
-        if total_weight <= 0:
-            return []
-    cum_weights: list[float] = []
-    acc = 0.0
-    for w in weights:
-        acc += w
-        cum_weights.append(acc)
+    def _weights_for(skip: set[date]):
+        """Day weights with reported days removed — for one material.
+
+        This used to be computed once for the whole mission, which meant a day
+        somebody had reported on was struck out for *every* material on it. A
+        student with Listening, Speaking and Writing all due Monday ticked
+        Listening and watched the other two vanish from the day. Being done with
+        one thing says nothing about the others.
+        """
+        w = [
+            0.0 if (from_date + timedelta(days=d)) in skip
+            else day_weight(availability, from_date + timedelta(days=d))
+            for d in range(n_days)
+        ]
+        if sum(w) <= 0:
+            # Fully blocked week(s) — fall back to even distribution rather than
+            # scheduling nothing at all. Reported days stay excluded: they are
+            # not blocked, they are done being planned.
+            w = [0.0 if (from_date + timedelta(days=d)) in skip else 1.0 for d in range(n_days)]
+        cum: list[float] = []
+        acc = 0.0
+        for x in w:
+            acc += x
+            cum.append(acc)
+        return w, cum
+
+    global_skip = skip_dates or set()
+    per_material = skip_by_material or {}
 
     tasks: list[dict] = []
     for m in goal.materials:
+        weights, cum_weights = _weights_for(per_material.get(m.id, global_skip))
+        total_weight = sum(weights)
+        if total_weight <= 0:
+            continue
         units = sorted(m.progress_units, key=lambda u: (u.position, u.id))
 
         # Absolute offset of each unit inside the material (for "pages 81-85").
@@ -432,6 +445,26 @@ def needs_replan(db: Session, goal: Goal, today: date) -> bool:
     return missed is not None
 
 
+def reported_by_material(db: Session, goal: Goal, from_date: date) -> dict[int, set[date]]:
+    """Days already reported on, per material.
+
+    A mission can put several materials on one day. Reporting one of them is a
+    fact about that material alone, so the skip has to be keyed the same way —
+    keying it by date struck the whole day out for every material on it.
+    """
+    out: dict[int, set[date]] = {}
+    rows = db.execute(
+        select(ScheduledTask.material_id, ScheduledTask.date).where(
+            ScheduledTask.goal_id == goal.id,
+            ScheduledTask.date >= from_date,
+            or_(ScheduledTask.completed.is_(True), ScheduledTask.actual_quantity.is_not(None)),
+        )
+    ).all()
+    for material_id, d in rows:
+        out.setdefault(material_id, set()).add(d)
+    return out
+
+
 def reported_dates(db: Session, goal: Goal, from_date: date) -> set[date]:
     """Days at or after `from_date` that already carry a row somebody reported on."""
     return set(
@@ -465,7 +498,7 @@ def derive_schedule(db: Session, goal: Goal, today: date) -> list[ScheduledTask]
     """
     if not goal.materials:
         return []
-    skip = reported_dates(db, goal, today)
+    skip = reported_by_material(db, goal, today)
     # `build_schedule` walks one material at a time, so its output is grouped by
     # material. Stored rows came back ordered by (date, id) — date first, and
     # within a date the order they were generated in. A *stable* sort on date
@@ -479,7 +512,7 @@ def derive_schedule(db: Session, goal: Goal, today: date) -> list[ScheduledTask]
             # A day that has not arrived is not done — say so.
             ScheduledTask(**t, completed=False, actual_quantity=None)
             for t in build_schedule(
-                goal, today, availability=goal.user.availability, skip_dates=skip
+                goal, today, availability=goal.user.availability, skip_by_material=skip
             )
         ),
         key=lambda t: t.date,

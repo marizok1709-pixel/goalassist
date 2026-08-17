@@ -94,6 +94,7 @@ export default function TodayPage() {
     try {
       const res = await api.updateDay(task.goal_id, task.date, {
         completed,
+        material_id: task.material_id,
         actual_quantity: actual,
         actual_minutes: minutes,
       });

@@ -382,9 +382,14 @@ def _record_day(db: Session, task: ScheduledTask, payload, actual: float) -> Non
     back to never-reported, and an execution record that says nothing happened is
     a different claim from no record at all.
     """
+    # Keyed by material as well as by day. Three materials due on one Monday are
+    # three separate facts; collapsing them onto (mission, date) made reporting
+    # one of them overwrite the others.
     existing = db.scalar(
         select(ExecutionRecord).where(
-            ExecutionRecord.goal_id == task.goal_id, ExecutionRecord.date == task.date
+            ExecutionRecord.goal_id == task.goal_id,
+            ExecutionRecord.date == task.date,
+            ExecutionRecord.material_id == task.material_id,
         )
     )
     if not payload.completed:
@@ -399,7 +404,9 @@ def _record_day(db: Session, task: ScheduledTask, payload, actual: float) -> Non
     else:
         day_status = DayStatus.partial
 
-    record = existing or ExecutionRecord(goal_id=task.goal_id, date=task.date)
+    record = existing or ExecutionRecord(
+        goal_id=task.goal_id, date=task.date, material_id=task.material_id
+    )
     record.material_id = task.material_id
     record.planned_units = task.quantity
     record.actual_units = actual
@@ -452,9 +459,27 @@ def update_day(
     today = _today(user)
     # A day that has been reported on already has a row; a day still ahead does
     # not, and is computed. Either way the student names the same thing.
-    task = next((t for t in _days_for(db, goal, today) if t.date == target), None)
-    if task is None:
+    candidates = [t for t in _days_for(db, goal, today) if t.date == target]
+    if not candidates:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Nothing planned for that day")
+
+    if payload.material_id is not None:
+        task = next((t for t in candidates if t.material_id == payload.material_id), None)
+        if task is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "That material has nothing planned for that day"
+            )
+    elif len(candidates) == 1:
+        task = candidates[0]
+    else:
+        # Never guess. Taking the first one silently is precisely the defect
+        # this check exists to prevent: a student ticked "Writing" and watched
+        # "Listening" get crossed out, because all three fell on the same Monday
+        # and the first row won.
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "That day holds more than one material — say which one (material_id)",
+        )
     return _report_day(db, user, task, payload)
 
 

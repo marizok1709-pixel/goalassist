@@ -62,7 +62,7 @@ export default function CalendarPage() {
     setBusy(dayKey(task));
     setError(null);
     try {
-      await api.updateDay(task.goal_id, task.date, body);
+      await api.updateDay(task.goal_id, task.date, { ...body, material_id: task.material_id });
       setLogOpen(null);
       await load();
     } catch {

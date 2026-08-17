@@ -29,6 +29,7 @@ database.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=dat
 from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import ExecutionRecord, ScheduledTask  # noqa: E402
+from app.services import engine  # noqa: E402
 
 client = TestClient(app)
 failures = []
@@ -176,6 +177,84 @@ check("another student's mission is not reportable", r.status_code == 404, r.sta
 
 r = client.patch(f"/goals/{gb}/days/not-a-date", headers=Hb, json={"completed": True})
 check("a malformed day is rejected", r.status_code == 422, r.status_code)
+
+# ------------------------------------------- three materials, one Monday
+# Sima's IELTS mission, 2026-08-17: Listening, Speaking and Writing all due the
+# same day. Ticking "Writing" crossed out "Listening", because the report was
+# keyed by (mission, date) and the first row won. Then the other two stopped
+# working entirely, because a reported day was struck out for *every* material
+# on it. Both are identity bugs: a day of a mission is not one piece of work.
+Hm = register("multi@example.com")
+gm = client.post("/goals", headers=Hm, json={
+    "title": "Pass IELTS", "deadline": (TODAY + timedelta(days=40)).isoformat()}).json()["id"]
+for name in ("Listening", "Speaking", "Writing"):
+    client.post(f"/goals/{gm}/materials", headers=Hm, json={
+        "name": name, "total_quantity": 20, "unit": "H/w", "already_completed": 0,
+        "minutes_per_unit": 30.0})
+
+day = [t for m in client.get("/today", headers=Hm).json()["missions"] for t in m["tasks"]]
+check("all three materials land on the same day", len(day) == 3, [t["description"] for t in day])
+by_name = {t["description"].split(":")[0]: t for t in day}
+check("…and they are three different materials",
+      len({t["material_id"] for t in day}) == 3, [t["material_id"] for t in day])
+
+# Tick the LAST one. Only that one may change.
+writing = by_name.get("Writing") or day[2]
+r = client.patch(f"/goals/{gm}/days/{TODAY.isoformat()}", headers=Hm,
+                 json={"completed": True, "material_id": writing["material_id"],
+                       "actual_quantity": 1})
+check("the third material can be reported", r.status_code == 200, r.text[:160])
+
+recs = records(gm)
+check("exactly one record was written", len(recs) == 1, len(recs))
+check("…against the material that was actually ticked",
+      recs and recs[0].material_id == writing["material_id"],
+      f"{recs[0].material_id if recs else None} vs {writing['material_id']}")
+
+after = [t for m in client.get("/today", headers=Hm).json()["missions"] for t in m["tasks"]]
+check("the other two are still there afterwards", len(after) == 3,
+      [t["description"] for t in after])
+done_now = [t for t in after if t["completed"]]
+check("…and exactly one of them is crossed out", len(done_now) == 1,
+      [t["description"] for t in done_now])
+check("…the one that was ticked",
+      done_now and done_now[0]["material_id"] == writing["material_id"],
+      done_now[0]["description"] if done_now else None)
+
+# And the remaining two must still be reportable — this is the half Sima hit
+# second: once the first was crossed out, the others stopped responding.
+speaking = by_name.get("Speaking") or day[1]
+r = client.patch(f"/goals/{gm}/days/{TODAY.isoformat()}", headers=Hm,
+                 json={"completed": True, "material_id": speaking["material_id"],
+                       "actual_quantity": 1})
+check("a second material on the same day is still reportable", r.status_code == 200, r.text[:160])
+check("and now two records exist, not one overwritten", len(records(gm)) == 2, len(records(gm)))
+
+# The skip is keyed by material, not by date — tested against the generator
+# directly, because through the API it cannot be made to fail: only stored days
+# feed the skip set, and nothing ahead of today is stored. Exercised here so the
+# property is actually proven rather than assumed.
+from app.models import Goal as _Goal  # noqa: E402
+
+with database.SessionLocal() as _db:
+    _g = _db.get(_Goal, gm)
+    _first = _g.materials[0]
+    _day = TODAY + timedelta(days=2)
+    by_date = engine.build_schedule(_g, TODAY, availability=AVAIL, skip_dates={_day})
+    by_mat = engine.build_schedule(
+        _g, TODAY, availability=AVAIL, skip_by_material={_first.id: {_day}}
+    )
+    on_day_date = {t["material_id"] for t in by_date if t["date"] == _day}
+    on_day_mat = {t["material_id"] for t in by_mat if t["date"] == _day}
+    check("a date-keyed skip empties the day for every material",
+          len(on_day_date) == 0, on_day_date)
+    check("a material-keyed skip leaves the other materials on that day",
+          len(on_day_mat) >= 1 and _first.id not in on_day_mat,
+          f"materials still on {_day}: {on_day_mat}")
+
+# Naming no material on an ambiguous day is refused rather than guessed.
+r = client.patch(f"/goals/{gm}/days/{TODAY.isoformat()}", headers=Hm, json={"completed": True})
+check("an ambiguous day is refused, not guessed", r.status_code == 422, r.status_code)
 
 # ------------------------------------------------- correcting a day not yet due
 # A live 500, found while writing this suite and pre-dating it: reporting a

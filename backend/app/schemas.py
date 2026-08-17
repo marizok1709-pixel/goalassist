@@ -367,6 +367,11 @@ class CalendarTaskOut(ScheduledTaskOut):
 
 
 class ScheduledTaskUpdate(BaseModel):
+    # Which material this report is about. A mission can have several materials
+    # falling on the same day — Listening, Speaking and Writing all due Monday —
+    # so (mission, date) does not identify a piece of work. Optional only when
+    # the day holds exactly one thing; ambiguity is refused rather than guessed.
+    material_id: int | None = None
     # True = reporting on this day, False = putting it back to never-reported.
     # It is NOT the resulting `completed` flag: whether the day counts as done is
     # derived from the amount, so reporting 0 reports a day that is not done.
