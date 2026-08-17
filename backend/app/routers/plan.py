@@ -150,10 +150,18 @@ def _enrich(report, goal: Goal, portfolio, today):
             )
         else:
             report.message = f"On pace to finish {mp.projected_finish:%b %-d}, inside your deadline."
-    elif mp.required_units_per_hour:
+    elif mp.remaining_units > 0:
+        # This used to read "about 60 per hour of study", which is what a rate
+        # looks like when it is divided by an estimate nobody gave. To a student
+        # with two tasks and three months it is noise, and the first real user to
+        # see it asked what the machine even does. Say the shape of the work and
+        # ask for the one number that would let us say more.
+        units = {m.unit for m in goal.materials if m.unit}
+        unit = units.pop() if len(units) == 1 else "items"
         report.message = (
-            f"No time estimate yet. Hitting the deadline means about "
-            f"{round(mp.required_units_per_hour)} per hour of study."
+            f"{_fmt_qty(mp.remaining_units)} {unit} left before "
+            f"{mp.deadline:%b %-d}. Tell me how long one takes and I can say "
+            f"whether that fits."
         )
     return report
 

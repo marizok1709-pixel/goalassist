@@ -55,6 +55,12 @@
           "description": "Mit Erfolg zum digitalen TestDAF: pages 22-24"
         },
         {
+          "date": "2026-08-16",
+          "weekday": "Sun",
+          "quantity": 1.0,
+          "description": "Modelprufung"
+        },
+        {
           "date": "2026-08-18",
           "weekday": "Tue",
           "quantity": 3.0,
@@ -63,20 +69,20 @@
         {
           "date": "2026-08-19",
           "weekday": "Wed",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 28-29"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 28-30"
         },
         {
           "date": "2026-08-21",
           "weekday": "Fri",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 30-32"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 31-33"
         },
         {
           "date": "2026-08-23",
           "weekday": "Sun",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 33-35"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 34-35"
         },
         {
           "date": "2026-08-25",
@@ -93,20 +99,20 @@
         {
           "date": "2026-08-28",
           "weekday": "Fri",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 42-43"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 42-44"
         },
         {
           "date": "2026-08-30",
           "weekday": "Sun",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 44-46"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 45-47"
         },
         {
           "date": "2026-09-01",
           "weekday": "Tue",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 47-49"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 48-49"
         },
         {
           "date": "2026-09-02",
@@ -123,20 +129,20 @@
         {
           "date": "2026-09-06",
           "weekday": "Sun",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 56-57"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 56-58"
         },
         {
           "date": "2026-09-08",
           "weekday": "Tue",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 58-60"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 59-61"
         },
         {
           "date": "2026-09-09",
           "weekday": "Wed",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 61-63"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 62-63"
         },
         {
           "date": "2026-09-11",
@@ -153,20 +159,20 @@
         {
           "date": "2026-09-15",
           "weekday": "Tue",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 70-71"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 70-72"
         },
         {
           "date": "2026-09-16",
           "weekday": "Wed",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 72-74"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 73-75"
         },
         {
           "date": "2026-09-18",
           "weekday": "Fri",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 75-77"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 76-77"
         },
         {
           "date": "2026-09-20",
@@ -183,32 +189,26 @@
         {
           "date": "2026-09-23",
           "weekday": "Wed",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 84-85"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 84-86"
         },
         {
           "date": "2026-09-25",
           "weekday": "Fri",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 86-88"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 87-89"
         },
         {
           "date": "2026-09-27",
           "weekday": "Sun",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 89-91"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 90-91"
         },
         {
           "date": "2026-09-29",
           "weekday": "Tue",
           "quantity": 3.0,
           "description": "Mit Erfolg zum digitalen TestDAF: pages 92-94"
-        },
-        {
-          "date": "2026-09-29",
-          "weekday": "Tue",
-          "quantity": 1.0,
-          "description": "Modelprufung"
         },
         {
           "date": "2026-09-30",
@@ -219,20 +219,20 @@
         {
           "date": "2026-10-02",
           "weekday": "Fri",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 98-99"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 98-100"
         },
         {
           "date": "2026-10-04",
           "weekday": "Sun",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 100-102"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 101-103"
         },
         {
           "date": "2026-10-06",
           "weekday": "Tue",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 103-105"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 104-105"
         },
         {
           "date": "2026-10-07",
@@ -249,20 +249,20 @@
         {
           "date": "2026-10-11",
           "weekday": "Sun",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 112-113"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 112-114"
         },
         {
           "date": "2026-10-13",
           "weekday": "Tue",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 114-116"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 115-117"
         },
         {
           "date": "2026-10-14",
           "weekday": "Wed",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 117-119"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 118-119"
         },
         {
           "date": "2026-10-16",
@@ -279,20 +279,20 @@
         {
           "date": "2026-10-20",
           "weekday": "Tue",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 126-127"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 126-128"
         },
         {
           "date": "2026-10-21",
           "weekday": "Wed",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 128-130"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 129-131"
         },
         {
           "date": "2026-10-23",
           "weekday": "Fri",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 131-133"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 132-133"
         },
         {
           "date": "2026-10-25",
@@ -309,20 +309,20 @@
         {
           "date": "2026-10-28",
           "weekday": "Wed",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 140-141"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 140-142"
         },
         {
           "date": "2026-10-30",
           "weekday": "Fri",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 142-144"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 143-145"
         },
         {
           "date": "2026-11-01",
           "weekday": "Sun",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 145-147"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 146-147"
         },
         {
           "date": "2026-11-03",
@@ -339,20 +339,20 @@
         {
           "date": "2026-11-06",
           "weekday": "Fri",
-          "quantity": 2.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 154-155"
+          "quantity": 3.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 154-156"
         },
         {
           "date": "2026-11-08",
           "weekday": "Sun",
           "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 156-158"
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 157-159"
         },
         {
           "date": "2026-11-10",
           "weekday": "Tue",
-          "quantity": 3.0,
-          "description": "Mit Erfolg zum digitalen TestDAF: pages 159-161"
+          "quantity": 2.0,
+          "description": "Mit Erfolg zum digitalen TestDAF: pages 160-161"
         }
       ],
       "derived_ranges": [
@@ -410,50 +410,50 @@
         {
           "date": "2026-08-18",
           "weekday": "Tue",
-          "quantity": 154.0,
-          "description": "Stepik problems: points 262-415"
+          "quantity": 155.0,
+          "description": "Stepik problems: points 262-416"
         },
         {
           "date": "2026-08-19",
           "weekday": "Wed",
-          "quantity": 155.0,
-          "description": "Stepik problems: points 416-570"
+          "quantity": 154.0,
+          "description": "Stepik problems: points 417-570"
         },
         {
           "date": "2026-08-21",
           "weekday": "Fri",
-          "quantity": 154.0,
-          "description": "Stepik problems: points 571-724"
+          "quantity": 155.0,
+          "description": "Stepik problems: points 571-725"
         },
         {
           "date": "2026-08-23",
           "weekday": "Sun",
-          "quantity": 155.0,
-          "description": "Stepik problems: points 725-879"
+          "quantity": 154.0,
+          "description": "Stepik problems: points 726-879"
         },
         {
           "date": "2026-08-25",
           "weekday": "Tue",
-          "quantity": 154.0,
-          "description": "Stepik problems: points 880-1033"
+          "quantity": 155.0,
+          "description": "Stepik problems: points 880-1034"
         },
         {
           "date": "2026-08-26",
           "weekday": "Wed",
-          "quantity": 155.0,
-          "description": "Stepik problems: points 1034-1188"
+          "quantity": 154.0,
+          "description": "Stepik problems: points 1035-1188"
         },
         {
           "date": "2026-08-28",
           "weekday": "Fri",
-          "quantity": 154.0,
-          "description": "Stepik problems: points 1189-1342"
+          "quantity": 155.0,
+          "description": "Stepik problems: points 1189-1343"
         },
         {
           "date": "2026-08-30",
           "weekday": "Sun",
-          "quantity": 155.0,
-          "description": "Stepik problems: points 1343-1497"
+          "quantity": 154.0,
+          "description": "Stepik problems: points 1344-1497"
         }
       ],
       "derived_ranges": [

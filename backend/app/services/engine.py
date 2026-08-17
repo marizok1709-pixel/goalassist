@@ -18,6 +18,7 @@ Definitions:
       >= 1.05  AHEAD | >= 0.90 ON_TRACK | >= 0.70 AT_RISK | < 0.70 OFF_TRACK
 """
 
+import math
 from datetime import date, timedelta
 
 from sqlalchemy import or_, select
@@ -279,7 +280,19 @@ def build_schedule(
         for d in range(n_days):
             target = remaining * cum_weights[d] / total_weight
             if integral:
-                target = float(round(target))
+                # Ceiling, not rounding. `round` puts the first whole item at the
+                # *midpoint* of its share, so a mission of 2 tasks across 95 days
+                # scheduled nothing at all until day 47 — the first user to try
+                # it opened the app, found no task and no checkbox, and asked
+                # where the "done" button was. A product whose promise is "what
+                # to do today" must never answer "nothing" while work remains.
+                #
+                # Ceiling lands item k on the first day its share opens, so work
+                # starts today and the spacing between items is unchanged. The
+                # total cannot drift: the final cumulative is exactly `remaining`
+                # for a whole number of units. Continuous materials are
+                # unaffected — this branch only runs for countable ones.
+                target = float(math.ceil(target - EPS))
             amount = target - prev_target
             prev_target = target
             while amount > EPS and seg_i < len(segments):

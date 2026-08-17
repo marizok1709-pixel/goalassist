@@ -63,6 +63,27 @@ check("no-chunk material schedules fully",
 day1 = [t for t in sched if t["date"] == date.today().isoformat()]
 check("day-1 range description", "pages 1-" in day1[0]["description"], day1[0]["description"])
 
+
+# A mission whose material has fewer items than there are days must still ask
+# for something today. `round()` on the cumulative target put the first whole
+# item at the *midpoint* of its share, so "2 tasks by November" scheduled
+# nothing at all for 47 days: the first real user opened the app, found no task
+# and no checkbox, and asked where the "done" button was. A product whose
+# promise is "what to do today" may not answer "nothing" while work remains.
+for total, unit, horizon in ((2, "tasks", 95), (5, "tasks", 60), (1, "exam", 30)):
+    gid_s = client.post("/goals", headers=H, json={
+        "title": f"Sparse {total}", "deadline": (date.today() + timedelta(days=horizon)).isoformat(),
+    }).json()["id"]
+    client.post(f"/goals/{gid_s}/materials", headers=H, json={
+        "name": "Practice", "total_quantity": total, "unit": unit, "already_completed": 0})
+    sp = client.get(f"/goals/{gid_s}/schedule?days=250", headers=H).json()
+    today_sp = [t for t in sp if t["date"] == date.today().isoformat()]
+    check(f"{total} {unit} over {horizon} days still has work today",
+          len(today_sp) > 0, "nothing scheduled on day one")
+    check(f"…and still schedules exactly {total} {unit} in total",
+          abs(sum(t["quantity"] for t in sp) - total) < 0.01,
+          sum(t["quantity"] for t in sp))
+
 # 4. STARTING POINT — already_completed at creation, honest trajectory from day one
 gid2 = client.post("/goals", headers=H, json={
     "title": "Linear Algebra Klausur", "deadline": (date.today() + timedelta(days=30)).isoformat(),
