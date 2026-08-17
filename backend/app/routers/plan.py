@@ -385,13 +385,25 @@ def _record_day(db: Session, task: ScheduledTask, payload, actual: float) -> Non
     # Keyed by material as well as by day. Three materials due on one Monday are
     # three separate facts; collapsing them onto (mission, date) made reporting
     # one of them overwrite the others.
-    existing = db.scalar(
-        select(ExecutionRecord).where(
-            ExecutionRecord.goal_id == task.goal_id,
-            ExecutionRecord.date == task.date,
-            ExecutionRecord.material_id == task.material_id,
+    matches = list(
+        db.scalars(
+            select(ExecutionRecord)
+            .where(
+                ExecutionRecord.goal_id == task.goal_id,
+                ExecutionRecord.date == task.date,
+                ExecutionRecord.material_id == task.material_id,
+            )
+            .order_by(ExecutionRecord.id)
         )
     )
+    # One day of one material is one fact. Duplicates should be impossible, but
+    # the earlier (mission, date) keying produced them for real — tapping a
+    # second material rewrote the first record's `material_id` and left an
+    # orphan beside it — so collapse any that exist rather than picking one and
+    # leaving the rest to disagree for ever.
+    existing = matches[0] if matches else None
+    for extra in matches[1:]:
+        db.delete(extra)
     if not payload.completed:
         if existing is not None:
             db.delete(existing)
